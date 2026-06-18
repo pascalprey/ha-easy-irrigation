@@ -1,0 +1,37 @@
+calculate:
+  name: Calculate
+  description: >-
+    Recompute the targeted zone(s): apply the daily net-ET0 depletion (once per
+    calendar day) and update the irrigation duration.
+  target:
+    entity:
+      integration: easy_irrigation
+      domain: sensor
+
+set_bucket:
+  name: Set bucket
+  description: Set the soil-moisture bucket (mm) for the targeted zone(s).
+  target:
+    entity:
+      integration: easy_irrigation
+      domain: sensor
+  fields:
+    value:
+      name: Value
+      description: New bucket value in millimetres.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: -100
+          max: 100
+          step: 0.01
+          unit_of_measurement: mm
+
+reset_bucket:
+  name: Reset bucket
+  description: Reset the bucket to 0 mm for the targeted zone(s).
+  target:
+    entity:
+      integration: easy_irrigation
+      domain: sensor

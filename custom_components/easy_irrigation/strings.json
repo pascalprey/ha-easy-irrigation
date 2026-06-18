@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add irrigation zone",
+        "description": "Configure one irrigation zone. Add the integration again for each additional zone.",
+        "data": {
+          "name": "Zone name",
+          "et0_sensor": "ET0 sensor (daily net ET in mm)",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "days_between": "Minimum days between irrigations"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit irrigation zone",
+        "data": {
+          "et0_sensor": "ET0 sensor (daily net ET in mm)",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "days_between": "Minimum days between irrigations"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "bucket": { "name": "Bucket" },
+      "duration": { "name": "Duration" }
+    }
+  },
+  "services": {
+    "calculate": {
+      "name": "Calculate",
+      "description": "Recompute the targeted zone(s): apply the daily net-ET0 depletion (once per calendar day) and update the irrigation duration."
+    },
+    "set_bucket": {
+      "name": "Set bucket",
+      "description": "Set the soil-moisture bucket (mm) for the targeted zone(s).",
+      "fields": {
+        "value": { "name": "Value", "description": "New bucket value in millimetres." }
+      }
+    },
+    "reset_bucket": {
+      "name": "Reset bucket",
+      "description": "Reset the bucket to 0 mm for the targeted zone(s)."
+    }
+  }
+}

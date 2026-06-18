@@ -1,0 +1,12 @@
+{
+  "domain": "easy_irrigation",
+  "name": "Easy Irrigation",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/pascalprey/ha-easy-irrigation",
+  "issue_tracker": "https://github.com/pascalprey/ha-easy-irrigation/issues",
+  "codeowners": ["@pascalprey"],
+  "dependencies": [],
+  "requirements": [],
+  "iot_class": "calculated"
+}
