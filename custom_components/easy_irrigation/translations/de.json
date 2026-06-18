@@ -59,10 +59,12 @@
       },
       "controller": {
         "title": "Zeitplan-Controller",
-        "description": "Berechnet die Gesamtlaufzeit und eine Startzeit, sodass die Bewässerung kurz vor Sonnenaufgang endet. Anschließend ordnest du Zonen den Phasen zu.",
+        "description": "Berechnet die Gesamtlaufzeit und eine Startzeit, sodass die Bewässerung kurz vor Sonnenaufgang endet. Der Controller rechnet täglich selbst zur eingestellten Uhrzeit (keine Automation nötig) und kann optional die Ventile direkt schalten. Anschließend ordnest du Zonen den Phasen zu.",
         "data": {
           "name": "Controller-Name",
           "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
+          "calc_time": "Uhrzeit der täglichen Berechnung (rückwärts, Ist-Wert des Tages — z. B. 23:00)",
+          "run_valves": "Ventile direkt vom Controller schalten lassen (ohne Automation)",
           "weather_entity": "Wetter-Entität für die Regenprognose — optional",
           "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
         }
@@ -125,6 +127,8 @@
         "description": "Beim Speichern werden die Phasen erneut durchlaufen.",
         "data": {
           "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
+          "calc_time": "Uhrzeit der täglichen Berechnung (rückwärts, Ist-Wert des Tages — z. B. 23:00)",
+          "run_valves": "Ventile direkt vom Controller schalten lassen (ohne Automation)",
           "weather_entity": "Wetter-Entität für die Regenprognose — optional",
           "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
         }

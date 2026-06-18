@@ -7,8 +7,10 @@ net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, compu
 that zone needs to be watered. The actual valve switching stays in **your** automations - this
 integration is the "brain" (buckets + durations + a start plan), not the "hands".
 
-> **Status:** v0.5. One zone = one config entry; a schedule controller is a separate entry.
+> **Status:** v0.6. One zone = one config entry; a schedule controller is a separate entry.
 > The UI is available in English and German (chosen by your Home Assistant language).
+> The controller can run the whole day on its own (daily calculation + optional valve
+> switching), so a fully automation-free setup is possible.
 
 ## Why
 
@@ -83,8 +85,23 @@ each zone becomes due again on its own schedule. After watering, your automation
 `easy_irrigation.register_irrigation` on each watered zone (refills its bucket, stamps the
 date). Set the same interval on all zones if you want them to batch onto shared watering nights.
 
-Your automation triggers at `start_time` (when `skip` is off), reads the `plan` attribute and
-opens each phase's valves for their durations, then calls `register_irrigation` per zone.
+### Running the day automatically
+
+The controller has two settings that let it run without any automation:
+
+- **Time of the daily calculation** (`calc_time`, default `23:00`): the controller applies the
+  daily net-ET0 depletion to every zone at this time and refreshes the plan. Pick a time late in
+  the day so the ET figure is the day's *actual* value rather than a morning forecast. This alone
+  replaces a "call `calculate` once a day" automation.
+- **Let this controller switch the valves itself** (`run_valves`, default off): at `start_time`
+  the controller opens each phase's valves for their durations (phases sequentially, zones within
+  a phase in parallel), then calls `register_irrigation` for each watered zone. With this on, the
+  integration needs **no automation at all**. In this mode the controller also closes all its
+  valves on load, so a restart that interrupted a run cannot leave a valve open.
+
+If you prefer to keep control in your own automation, leave `run_valves` off: trigger at
+`start_time` (when `skip` is off), read the `plan` attribute and open each phase's valves for their
+durations, then call `register_irrigation` per zone.
 
 ## Development
 
@@ -100,7 +117,8 @@ Assistant dependencies and are unit-tested: `pytest tests/`.
 - [x] Per-zone valve entity, surfaced in the controller's plan.
 - [x] `register_irrigation` service + per-zone minimum days between irrigations.
 - [x] English + German translations.
-- [ ] Optional built-in valve execution.
+- [x] Built-in daily calculation at a configurable time (no automation needed).
+- [x] Optional built-in valve execution (fully automation-free watering).
 - [ ] Number entities for live per-zone tuning.
 
 ## License

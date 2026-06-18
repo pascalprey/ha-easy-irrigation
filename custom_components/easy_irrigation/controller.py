@@ -1,15 +1,22 @@
 """Schedule controller: aggregates due zones into a watering plan.
 
-Plan-only: it computes the total runtime, per-phase offsets and the start time
-(so watering finishes ``sunrise_offset`` minutes before sunrise) plus a
-weather-based skip flag. The minimum interval between waterings lives per zone
-(a zone within its interval simply reports duration 0), so this controller only
-reads the current zone durations. It does not switch any valves - the user's
-automations consume these entities.
+It computes the total runtime, per-phase offsets and the start time (so watering
+finishes ``sunrise_offset`` minutes before sunrise) plus a weather-based skip
+flag. The minimum interval between waterings lives per zone (a zone within its
+interval simply reports duration 0), so this controller only reads the current
+zone durations.
+
+It also drives the day on its own: a daily calculation at the configured
+``calc_time`` depletes every zone's bucket and refreshes the plan, and -
+optionally (``run_valves``) - the controller switches the valves itself at the
+start time (phases sequentially, zones within a phase in parallel) and registers
+each watering. With ``run_valves`` off it stays plan-only and the user's own
+automation consumes these entities.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import timedelta
@@ -17,14 +24,22 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_point_in_time,
+    async_track_time_change,
+    async_track_time_interval,
+)
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CALC_TIME,
     CONF_RAIN_THRESHOLD,
+    CONF_RUN_VALVES,
     CONF_SUNRISE_OFFSET,
     CONF_VALVE_ENTITY,
     CONF_WEATHER_ENTITY,
+    DEFAULT_CALC_TIME,
+    DEFAULT_RUN_VALVES,
     DEFAULTS,
     phases_from_config,
     to_float,
@@ -35,6 +50,12 @@ _LOGGER = logging.getLogger(__name__)
 
 _UNAVAILABLE = ("unknown", "unavailable", "none", "", None)
 _RECOMPUTE_INTERVAL = timedelta(seconds=60)
+
+# Per valve domain: (service to open, service to close).
+_VALVE_SERVICES = {
+    "switch": ("turn_on", "turn_off"),
+    "valve": ("open_valve", "close_valve"),
+}
 
 
 class ScheduleController:
@@ -51,25 +72,76 @@ class ScheduleController:
         self.plan: list[dict] = []
         self._listeners: list[Callable[[], None]] = []
         self._unsub_timer: Callable[[], None] | None = None
+        self._unsub_calc: Callable[[], None] | None = None
+        self._start_unsub: Callable[[], None] | None = None
+        self._pending_start: float | None = None
+        self._running: bool = False
+        self._run_task: asyncio.Task | None = None
 
     @property
     def config(self) -> dict:
         return {**self.entry.data, **self.entry.options}
 
+    @property
+    def run_valves(self) -> bool:
+        """Whether this controller switches the valves itself."""
+        return bool(self.config.get(CONF_RUN_VALVES, DEFAULT_RUN_VALVES))
+
     def start(self) -> None:
         self._unsub_timer = async_track_time_interval(
             self.hass, self._tick, _RECOMPUTE_INTERVAL
         )
+        hour, minute, second = self._calc_time_parts()
+        self._unsub_calc = async_track_time_change(
+            self.hass, self._calc_fire, hour=hour, minute=minute, second=second
+        )
+        if self.run_valves:
+            # The controller owns the valves in this mode: close them on load so a
+            # restart that interrupted a run cannot leave a valve open.
+            self.hass.async_create_task(self._async_safety_close())
         self.hass.async_create_task(self.async_recompute())
 
     def stop(self) -> None:
-        if self._unsub_timer is not None:
-            self._unsub_timer()
-            self._unsub_timer = None
+        for attr in ("_unsub_timer", "_unsub_calc", "_start_unsub"):
+            unsub = getattr(self, attr, None)
+            if unsub is not None:
+                unsub()
+                setattr(self, attr, None)
+        self._pending_start = None
+        if self._run_task is not None and not self._run_task.done():
+            # Cancelling the run lets each zone's ``finally`` close its valve.
+            self._run_task.cancel()
+
+    def _calc_time_parts(self) -> tuple[int, int, int]:
+        """Parse the configured ``HH:MM[:SS]`` calc time into integer parts."""
+        raw = str(self.config.get(CONF_CALC_TIME) or DEFAULT_CALC_TIME)
+        parts = raw.split(":")
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+            second = int(parts[2]) if len(parts) > 2 else 0
+        except (ValueError, IndexError):
+            return 23, 0, 0
+        return hour, minute, second
 
     @callback
     def _tick(self, _now) -> None:
         self.hass.async_create_task(self.async_recompute())
+
+    @callback
+    def _calc_fire(self, _now) -> None:
+        self.hass.async_create_task(self._async_daily_calc())
+
+    async def _async_daily_calc(self) -> None:
+        """Deplete every zone's bucket (once/day) then refresh the plan."""
+        for coordinator in self._zone_coordinators():
+            try:
+                await coordinator.async_calculate()
+            except Exception as err:  # noqa: BLE001 - one bad zone must not stop the rest
+                _LOGGER.warning(
+                    "Easy Irrigation: daily calculate failed for a zone: %s", err
+                )
+        await self.async_recompute()
 
     def add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(cb)
@@ -104,6 +176,54 @@ class ScheduleController:
         if zone_entry is None:
             return None
         return {**zone_entry.data, **zone_entry.options}.get(CONF_VALVE_ENTITY)
+
+    def _coordinator_for(self, sensor_id: str | None):
+        """Return the zone coordinator owning a duration-sensor entity_id."""
+        if not sensor_id:
+            return None
+        entity = er.async_get(self.hass).async_get(sensor_id)
+        if entity is None or entity.config_entry_id is None:
+            return None
+        zone_entry = self.hass.config_entries.async_get_entry(entity.config_entry_id)
+        coordinator = getattr(zone_entry, "runtime_data", None)
+        # Duck-typed: a controller entry's runtime_data has no async_calculate.
+        return coordinator if hasattr(coordinator, "async_calculate") else None
+
+    def _zone_coordinators(self) -> list:
+        """Unique zone coordinators referenced by this controller's phases."""
+        result: list = []
+        seen: set[int] = set()
+        for sensors in self._phases().values():
+            for sensor_id in sensors:
+                coordinator = self._coordinator_for(sensor_id)
+                if coordinator is not None and id(coordinator) not in seen:
+                    seen.add(id(coordinator))
+                    result.append(coordinator)
+        return result
+
+    async def _async_set_valve(self, valve: str, turn_on: bool) -> None:
+        """Open or close a valve, honouring the switch vs valve domain."""
+        domain = valve.split(".")[0]
+        open_service, close_service = _VALVE_SERVICES.get(domain, ("turn_on", "turn_off"))
+        await self.hass.services.async_call(
+            domain,
+            open_service if turn_on else close_service,
+            {},
+            target={"entity_id": valve},
+            blocking=True,
+        )
+
+    async def _async_safety_close(self) -> None:
+        """Close every configured valve (used on load in run_valves mode)."""
+        for sensors in self._phases().values():
+            for sensor_id in sensors:
+                valve = self._valve_for(sensor_id)
+                if not valve:
+                    continue
+                try:
+                    await self._async_set_valve(valve, False)
+                except Exception as err:  # noqa: BLE001 - best-effort safety
+                    _LOGGER.debug("Safety close failed for %s: %s", valve, err)
 
     def _next_sunrise_epoch(self) -> float | None:
         sun = self.hass.states.get("sun.sun")
@@ -186,3 +306,94 @@ class ScheduleController:
                 )
         self.plan = plan
         self._notify()
+        self._reschedule_run()
+
+    # --- Built-in valve execution (run_valves mode) -----------------------
+
+    def _reschedule_run(self) -> None:
+        """Arm a one-shot timer at the start time when run_valves is enabled.
+
+        Only arms for a *future* start time, which also prevents re-firing after a
+        run finishes (the start time is then in the past until the next sunrise
+        rolls the plan over to the following day).
+        """
+        if not self.run_valves or self._running:
+            return
+        target = self.start_epoch
+        valid = (
+            target is not None
+            and self.total > 0
+            and not self.skip
+            and target > dt_util.utcnow().timestamp()
+        )
+        if not valid:
+            self._cancel_run_timer()
+            return
+        if target == self._pending_start and self._start_unsub is not None:
+            return
+        self._cancel_run_timer()
+        self._start_unsub = async_track_point_in_time(
+            self.hass, self._start_fire, dt_util.utc_from_timestamp(target)
+        )
+        self._pending_start = target
+
+    def _cancel_run_timer(self) -> None:
+        if self._start_unsub is not None:
+            self._start_unsub()
+            self._start_unsub = None
+        self._pending_start = None
+
+    @callback
+    def _start_fire(self, _now) -> None:
+        self._start_unsub = None
+        self._pending_start = None
+        if self._running:
+            return
+        self._run_task = self.hass.async_create_task(self._async_run())
+
+    async def _async_run(self) -> None:
+        """Execute the current plan once, closing valves whatever happens."""
+        if self._running or self.skip or self.total <= 0:
+            return
+        self._running = True
+        try:
+            await self._async_execute_plan()
+        except asyncio.CancelledError:
+            _LOGGER.warning("Easy Irrigation: watering run cancelled; valves closed")
+            raise
+        except Exception as err:  # noqa: BLE001 - log and recover
+            _LOGGER.error("Easy Irrigation: watering run failed: %s", err)
+        finally:
+            self._running = False
+            self._run_task = None
+
+    async def _async_execute_plan(self) -> None:
+        """Run phases one after another; zones within a phase in parallel."""
+        # Freeze the plan at start: the 60 s recompute keeps reassigning self.plan
+        # (zones drop out as they register), but a run executes what was due at the
+        # start time.
+        plan = list(self.plan)
+        for phase in plan:
+            runs = [
+                self._async_run_zone(zone)
+                for zone in phase.get("zones", [])
+                if zone.get("valve") and int(zone.get("duration", 0)) > 0
+            ]
+            if runs:
+                await asyncio.gather(*runs)
+
+    async def _async_run_zone(self, zone: dict) -> None:
+        """Open a zone's valve for its duration, then register the watering."""
+        valve = zone["valve"]
+        duration = int(zone["duration"])
+        await self._async_set_valve(valve, True)
+        try:
+            await asyncio.sleep(duration)
+        except asyncio.CancelledError:
+            # Fire-and-forget the close so a cancelled run still shuts the valve.
+            self.hass.async_create_task(self._async_set_valve(valve, False))
+            raise
+        await self._async_set_valve(valve, False)
+        coordinator = self._coordinator_for(zone.get("duration_sensor"))
+        if coordinator is not None:
+            await coordinator.async_register_irrigation()

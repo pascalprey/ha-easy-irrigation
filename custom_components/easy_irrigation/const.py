@@ -48,7 +48,13 @@ CONF_MIN_DAYS_BETWEEN = "min_days_between"
 CONF_SUNRISE_OFFSET = "sunrise_offset_min"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_RAIN_THRESHOLD = "rain_threshold_mm"
+CONF_CALC_TIME = "calc_time"      # daily wall-clock time to run the calculation (HH:MM:SS)
+CONF_RUN_VALVES = "run_valves"    # let the controller switch the valves itself (no automation)
 CONF_PHASES = "phases"  # list[list[zone duration-sensor entity_id]]
+
+# Controller defaults that are not plain floats (kept out of DEFAULTS below)
+DEFAULT_CALC_TIME = "23:00:00"
+DEFAULT_RUN_VALVES = False
 
 # Flow-only keys (collected during the phase loop, never stored verbatim)
 CONF_PHASE_ZONES = "zones"

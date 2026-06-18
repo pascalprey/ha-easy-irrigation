@@ -59,12 +59,15 @@
       },
       "controller": {
         "title": "Schedule controller",
-        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Next you assign zones to phases.",
+        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. The controller calculates by itself once a day at the configured time (no automation needed) and can optionally switch the valves directly. Next you assign zones to phases.",
         "data": {
           "name": "Controller name",
           "sunrise_offset_min": "Finish this many minutes before sunrise",
+          "calc_time": "Time of the daily calculation (retrospective, the day's actual ET — e.g. 23:00)",
+          "run_valves": "Let this controller switch the valves itself (no automation needed)",
           "weather_entity": "Weather entity for the rain forecast — optional",
-          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"        }
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"
+        }
       },
       "phase": {
         "title": "Phase {n}",
@@ -124,8 +127,11 @@
         "description": "Saving re-walks the phase assignment.",
         "data": {
           "sunrise_offset_min": "Finish this many minutes before sunrise",
+          "calc_time": "Time of the daily calculation (retrospective, the day's actual ET — e.g. 23:00)",
+          "run_valves": "Let this controller switch the valves itself (no automation needed)",
           "weather_entity": "Weather entity for the rain forecast — optional",
-          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"        }
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"
+        }
       },
       "phase": {
         "title": "Phase {n}",

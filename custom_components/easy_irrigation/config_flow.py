@@ -11,6 +11,7 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_ADD_ANOTHER,
     CONF_AREA,
+    CONF_CALC_TIME,
     CONF_DEWPOINT_SENSOR,
     CONF_DRAINAGE,
     CONF_ENTRY_TYPE,
@@ -28,6 +29,7 @@ from .const import (
     CONF_PHASES,
     CONF_RAIN_SENSOR,
     CONF_RAIN_THRESHOLD,
+    CONF_RUN_VALVES,
     CONF_SOLAR_SENSOR,
     CONF_SUNRISE_OFFSET,
     CONF_TEMP_MAX_SENSOR,
@@ -37,6 +39,8 @@ from .const import (
     CONF_WIND_HEIGHT,
     CONF_WIND_SENSOR,
     CONF_WIND_UNIT,
+    DEFAULT_CALC_TIME,
+    DEFAULT_RUN_VALVES,
     DEFAULTS,
     DOMAIN,
     ENTRY_TYPE_CONTROLLER,
@@ -151,6 +155,12 @@ def _controller_schema(d: dict[str, Any], *, include_name: bool) -> vol.Schema:
             CONF_SUNRISE_OFFSET, default=d.get(CONF_SUNRISE_OFFSET, DEFAULTS[CONF_SUNRISE_OFFSET])
         )
     ] = _num("min", minimum=0, maximum=240, step=1)
+    fields[
+        vol.Required(CONF_CALC_TIME, default=d.get(CONF_CALC_TIME, DEFAULT_CALC_TIME))
+    ] = selector.TimeSelector()
+    fields[
+        vol.Required(CONF_RUN_VALVES, default=d.get(CONF_RUN_VALVES, DEFAULT_RUN_VALVES))
+    ] = selector.BooleanSelector()
     fields[_opt(CONF_WEATHER_ENTITY, d)] = selector.EntitySelector(
         selector.EntitySelectorConfig(domain="weather")
     )
