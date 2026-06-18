@@ -79,6 +79,12 @@ It exposes (plan only - it does not switch valves):
 - `sensor.<controller>_start_time` (timestamp) - when to start.
 - `binary_sensor.<controller>_skip` - on when the **weather entity**'s daily forecast rainfall
   is at or above the threshold.
+- a **Next watering** timestamp sensor *per zone*, attached to that zone's device so it sits
+  next to the zone's bucket/duration. Its value is the zone's own valve-open time
+  (`start_time` + the phase offset); it is `unknown` when the zone is not scheduled, with a
+  `status` attribute saying why (`scheduled`, `not_due`, `rain_skip`, `no_schedule`) and a
+  `skip` attribute mirroring the rain-skip flag. This makes "when does this zone water next,
+  and is it being skipped?" visible at a glance.
 
 Because the minimum interval is **per zone**, a zone that just ran does not block the others:
 each zone becomes due again on its own schedule. After watering, your automation calls

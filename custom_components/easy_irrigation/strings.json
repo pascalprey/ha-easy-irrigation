@@ -164,6 +164,7 @@
     "sensor": {
       "bucket": { "name": "Bucket" },
       "duration": { "name": "Duration" },
+      "next_watering": { "name": "Next watering" },
       "total_runtime": { "name": "Total runtime" },
       "start_time": { "name": "Start time" }
     },

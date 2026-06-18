@@ -70,6 +70,8 @@ class ScheduleController:
         self.stage_durations: dict[int, float] = {}
         self.stage_offsets: dict[int, float] = {}
         self.plan: list[dict] = []
+        # Per-zone next-watering info, keyed by zone entry_id (for the zone sensors).
+        self.zone_next: dict[str, dict] = {}
         self._listeners: list[Callable[[], None]] = []
         self._unsub_timer: Callable[[], None] | None = None
         self._unsub_calc: Callable[[], None] | None = None
@@ -176,6 +178,11 @@ class ScheduleController:
         if zone_entry is None:
             return None
         return {**zone_entry.data, **zone_entry.options}.get(CONF_VALVE_ENTITY)
+
+    def _zone_entry_id_for(self, sensor_id: str) -> str | None:
+        """Config entry_id of the zone owning a duration-sensor entity_id."""
+        entity = er.async_get(self.hass).async_get(sensor_id)
+        return entity.config_entry_id if entity is not None else None
 
     def _coordinator_for(self, sensor_id: str | None):
         """Return the zone coordinator owning a duration-sensor entity_id."""
@@ -305,8 +312,41 @@ class ScheduleController:
                     }
                 )
         self.plan = plan
+        self.zone_next = self._build_zone_next(phases)
         self._notify()
         self._reschedule_run()
+
+    def _build_zone_next(self, phases: dict[int, list[str]]) -> dict[str, dict]:
+        """Per-zone next-watering info keyed by zone entry_id.
+
+        ``epoch`` is the zone's valve-open time (start + phase offset) when it is
+        due and not rained off, else ``None`` with a ``status`` saying why
+        (``not_due`` / ``rain_skip`` / ``no_schedule``).
+        """
+        result: dict[str, dict] = {}
+        for index, sensors in phases.items():
+            offset = int(self.stage_offsets.get(index, 0))
+            for sensor_id in sensors:
+                zone_entry_id = self._zone_entry_id_for(sensor_id)
+                if not zone_entry_id:
+                    continue
+                duration = int(self._read_duration(sensor_id))
+                if duration <= 0:
+                    info = {"epoch": None, "status": "not_due", "duration": 0}
+                elif self.skip:
+                    info = {"epoch": None, "status": "rain_skip", "duration": duration}
+                elif self.start_epoch is not None:
+                    info = {
+                        "epoch": self.start_epoch + offset,
+                        "status": "scheduled",
+                        "duration": duration,
+                    }
+                else:
+                    info = {"epoch": None, "status": "no_schedule", "duration": duration}
+                info["phase"] = index
+                info["offset"] = offset
+                result[zone_entry_id] = info
+        return result
 
     # --- Built-in valve execution (run_valves mode) -----------------------
 

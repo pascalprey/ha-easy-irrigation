@@ -57,6 +57,24 @@ async def async_setup_entry(
             names = [_zone_name(hass, s) for s in zone_sensors]
             label = f"Phase {index} ({', '.join(names)})" if names else f"Phase {index}"
             entities.append(PhaseDurationSensor(controller, entry, index, label))
+
+        # One "next watering" sensor per zone, attached to that zone's device so
+        # it shows up alongside the zone's bucket/duration.
+        registry = er.async_get(hass)
+        seen_zones: set[str] = set()
+        for zone_sensors in phases:
+            for sensor_id in zone_sensors:
+                ent = registry.async_get(sensor_id)
+                if ent is None or ent.config_entry_id is None:
+                    continue
+                if ent.config_entry_id in seen_zones:
+                    continue
+                zone_entry = hass.config_entries.async_get_entry(ent.config_entry_id)
+                if zone_entry is None:
+                    continue
+                seen_zones.add(ent.config_entry_id)
+                entities.append(ZoneNextWateringSensor(controller, entry, zone_entry))
+
         async_add_entities(entities)
         return
 
@@ -228,3 +246,55 @@ class PhaseDurationSensor(_ControllerSensorBase):
     @property
     def native_value(self) -> int:
         return int(self._controller.stage_durations.get(self._index, 0))
+
+
+class ZoneNextWateringSensor(SensorEntity):
+    """When a zone is next due to be watered (lives on the zone's device).
+
+    The value is the zone's valve-open time (controller start time + phase
+    offset). It is ``unknown`` when the zone is not due, when rain skips the run,
+    or when no start time can be computed - the ``status`` attribute says which,
+    and ``skip`` mirrors the controller's rain-skip flag.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "next_watering"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:calendar-clock"
+
+    def __init__(
+        self,
+        controller: ScheduleController,
+        controller_entry: ConfigEntry,
+        zone_entry: ConfigEntry,
+    ) -> None:
+        self._controller = controller
+        self._zone_entry_id = zone_entry.entry_id
+        self._attr_unique_id = (
+            f"{controller_entry.entry_id}_{zone_entry.entry_id}_next_watering"
+        )
+        # identifiers only -> attach to the existing zone device, don't recreate it
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, zone_entry.entry_id)})
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(self._controller.add_listener(self.async_write_ha_state))
+
+    @property
+    def _info(self) -> dict:
+        return self._controller.zone_next.get(self._zone_entry_id) or {}
+
+    @property
+    def native_value(self) -> datetime | None:
+        epoch = self._info.get("epoch")
+        return dt_util.utc_from_timestamp(epoch) if epoch else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        info = self._info
+        return {
+            "status": info.get("status", "unknown"),
+            "skip": self._controller.skip,
+            "phase": info.get("phase"),
+            "offset_seconds": info.get("offset"),
+            "duration_seconds": info.get("duration"),
+        }

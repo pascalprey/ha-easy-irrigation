@@ -164,6 +164,7 @@
     "sensor": {
       "bucket": { "name": "Wasserspeicher" },
       "duration": { "name": "Dauer" },
+      "next_watering": { "name": "Nächste Bewässerung" },
       "total_runtime": { "name": "Gesamtlaufzeit" },
       "start_time": { "name": "Startzeit" }
     },
