@@ -21,6 +21,7 @@ from .const import (
     CONF_LEAD_TIME,
     CONF_MAX_BUCKET,
     CONF_MAX_DURATION,
+    CONF_MIN_DAYS_BETWEEN,
     CONF_MODE,
     CONF_MULTIPLIER,
     CONF_RAIN_SENSOR,
@@ -35,6 +36,7 @@ from .const import (
     MODE_SENSOR,
     STORAGE_VERSION,
     WIND_UNIT_KMH,
+    to_float,
 )
 from .et0 import avp_from_dewpoint, avp_from_rh, et0_fao56, wind_speed_2m
 
@@ -104,11 +106,10 @@ class EasyIrrigationCoordinator:
         state = self.hass.states.get(entity_id)
         if state is None or state.state in _UNAVAILABLE:
             return None
-        try:
-            return float(state.state)
-        except (ValueError, TypeError):
+        value = to_float(state.state)
+        if value is None:
             _LOGGER.warning("Sensor %s is not numeric: %s", entity_id, state.state)
-            return None
+        return value
 
     def _read_et0(self) -> float | None:
         """Return the daily net ET (mm) for this zone, by configured mode."""
@@ -161,9 +162,19 @@ class EasyIrrigationCoordinator:
         rain = self._read_float(cfg.get(CONF_RAIN_SENSOR))
         return gross - rain if rain is not None else gross
 
+    def _within_min_interval(self) -> bool:
+        """True while the per-zone minimum interval since the last watering holds."""
+        min_days = int(to_float(self.config.get(CONF_MIN_DAYS_BETWEEN, 0)) or 0)
+        if min_days <= 0 or not self.last_irrigation_date:
+            return False
+        last = dt_util.parse_date(self.last_irrigation_date)
+        if last is None:
+            return False
+        return (dt_util.now().date() - last).days < min_days
+
     def _recompute_duration(self) -> None:
         cfg = self.config
-        if self.bucket < 0:
+        if self.bucket < 0 and not self._within_min_interval():
             area = float(cfg[CONF_AREA])
             flow = float(cfg[CONF_FLOW])
             precipitation_rate = flow * 60 / area  # mm/h

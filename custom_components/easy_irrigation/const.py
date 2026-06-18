@@ -42,17 +42,35 @@ CONF_MAX_DURATION = "max_duration_s"
 CONF_MULTIPLIER = "multiplier"
 CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
+CONF_MIN_DAYS_BETWEEN = "min_days_between"
 
 # Schedule controller parameters
 CONF_SUNRISE_OFFSET = "sunrise_offset_min"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_RAIN_THRESHOLD = "rain_threshold_mm"
-CONF_MIN_DAYS_BETWEEN_RUNS = "min_days_between_runs"
 CONF_PHASES = "phases"  # list[list[zone duration-sensor entity_id]]
 
 # Flow-only keys (collected during the phase loop, never stored verbatim)
 CONF_PHASE_ZONES = "zones"
 CONF_ADD_ANOTHER = "add_another"
+
+def to_float(value) -> float | None:
+    """Parse a float, tolerant of comma decimals (e.g. ``"3,86"``).
+
+    Returns ``None`` for non-numeric / missing input instead of raising, so a
+    sensor that reports a localised value never crashes the calculation.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        pass
+    try:
+        return float(str(value).replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
 
 def phases_from_config(cfg: dict) -> list[list[str]]:
     """Return the controller's phases as a list of zone-sensor lists.
@@ -84,5 +102,5 @@ DEFAULTS: dict[str, float] = {
     CONF_WIND_HEIGHT: 10.0,
     CONF_SUNRISE_OFFSET: 30.0,
     CONF_RAIN_THRESHOLD: 2.0,
-    CONF_MIN_DAYS_BETWEEN_RUNS: 0.0,
+    CONF_MIN_DAYS_BETWEEN: 0.0,
 }

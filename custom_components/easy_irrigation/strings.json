@@ -29,7 +29,8 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)"
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
         }
       },
       "calculated": {
@@ -52,7 +53,8 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)"
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
         }
       },
       "controller": {
@@ -62,9 +64,7 @@
           "name": "Controller name",
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "weather_entity": "Weather entity for the rain forecast — optional",
-          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
-          "min_days_between_runs": "Minimum days between watering runs (0 = no limit)"
-        }
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"        }
       },
       "phase": {
         "title": "Phase {n}",
@@ -92,7 +92,8 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)"
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
         }
       },
       "calculated": {
@@ -114,7 +115,8 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)"
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
         }
       },
       "controller": {
@@ -123,9 +125,7 @@
         "data": {
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "weather_entity": "Weather entity for the rain forecast — optional",
-          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
-          "min_days_between_runs": "Minimum days between watering runs (0 = no limit)"
-        }
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"        }
       },
       "phase": {
         "title": "Phase {n}",
@@ -183,7 +183,7 @@
     },
     "register_irrigation": {
       "name": "Register irrigation",
-      "description": "Record that the targeted zone(s) were just watered: refill the bucket and stamp today's date (used by the controller's minimum interval).",
+      "description": "Record that the targeted zone(s) were just watered: refill the bucket and stamp today's date (used by the zone's minimum interval).",
       "fields": {
         "amount_mm": { "name": "Amount (mm)", "description": "Water applied in mm; if omitted the bucket is reset to 0." }
       }

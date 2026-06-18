@@ -183,17 +183,10 @@ class TotalRuntimeSensor(_ControllerSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
-        next_allowed = None
-        if self._controller.next_allowed_epoch is not None:
-            next_allowed = dt_util.utc_from_timestamp(
-                self._controller.next_allowed_epoch
-            ).isoformat()
         return {
             "stage_durations": {str(k): v for k, v in self._controller.stage_durations.items()},
             "stage_offsets": {str(k): v for k, v in self._controller.stage_offsets.items()},
             "skip": self._controller.skip,
-            "blocked": self._controller.blocked,
-            "next_allowed": next_allowed,
             "plan": self._controller.plan,
         }
 

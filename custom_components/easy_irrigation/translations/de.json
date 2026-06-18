@@ -1,0 +1,194 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Easy Irrigation",
+        "description": "Füge eine Bewässerungszone hinzu oder einen Zeitplan-Controller, der deine Zonen zu einem Startplan zusammenfasst.",
+        "menu_options": {
+          "zone": "Bewässerungszone hinzufügen",
+          "controller": "Zeitplan-Controller hinzufügen"
+        }
+      },
+      "zone": {
+        "title": "Bewässerungszone hinzufügen",
+        "description": "Benenne die Zone und wähle, wie ihre Verdunstung ermittelt wird.",
+        "data": {
+          "name": "Zonenname",
+          "et0_mode": "ET0-Quelle"
+        }
+      },
+      "sensor": {
+        "title": "ET0 aus einem Sensor",
+        "description": "Gib einen Sensor mit der täglichen Netto-Verdunstung (ET0 minus Niederschlag) in mm an sowie die Zonenparameter.",
+        "data": {
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "et0_sensor": "ET0-Sensor (tägl. Netto-ET in mm)",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
+      "calculated": {
+        "title": "ET0 aus Wettersensoren (FAO-56)",
+        "description": "Gib tagesaggregierte Wettersensoren an. Sonneneinstrahlung und Niederschlag sind optional (Einstrahlung wird sonst aus der Temperaturspanne geschätzt; ohne Niederschlag ergibt sich Brutto-ET0). Standort und Höhe stammen aus Home Assistant.",
+        "data": {
+          "temp_min_sensor": "Tagesminimum-Temperatur (°C)",
+          "temp_max_sensor": "Tagesmaximum-Temperatur (°C)",
+          "humidity_sensor": "Mittlere relative Luftfeuchte (%) — optional, wenn Taupunkt gesetzt",
+          "dewpoint_sensor": "Taupunkt (°C) — optional, bevorzugt vor Luftfeuchte",
+          "wind_sensor": "Mittlere Windgeschwindigkeit",
+          "wind_unit": "Windgeschwindigkeits-Einheit",
+          "wind_height_m": "Wind-Messhöhe (m)",
+          "solar_sensor": "Sonneneinstrahlung (MJ/m²/Tag) — optional",
+          "rain_sensor": "Tagesniederschlag (mm) — optional",
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
+      "controller": {
+        "title": "Zeitplan-Controller",
+        "description": "Berechnet die Gesamtlaufzeit und eine Startzeit, sodass die Bewässerung kurz vor Sonnenaufgang endet. Anschließend ordnest du Zonen den Phasen zu.",
+        "data": {
+          "name": "Controller-Name",
+          "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
+          "weather_entity": "Wetter-Entität für die Regenprognose — optional",
+          "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
+        }
+      },
+      "phase": {
+        "title": "Phase {n}",
+        "description": "Wähle die Zonen für diese Phase (bereits verwendete Zonen sind ausgeblendet). Zonen einer Phase laufen parallel, Phasen nacheinander. Setze den Haken, um eine weitere Phase hinzuzufügen.",
+        "data": {
+          "zones": "Zonen in dieser Phase",
+          "add_another": "Weitere Phase hinzufügen"
+        }
+      }
+    },
+    "error": {
+      "need_humidity_or_dewpoint": "Gib entweder einen Luftfeuchte- oder einen Taupunkt-Sensor an."
+    }
+  },
+  "options": {
+    "step": {
+      "sensor": {
+        "title": "Zone bearbeiten (ET0 aus Sensor)",
+        "data": {
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "et0_sensor": "ET0-Sensor (tägl. Netto-ET in mm)",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
+      "calculated": {
+        "title": "Zone bearbeiten (ET0 aus Wettersensoren)",
+        "data": {
+          "temp_min_sensor": "Tagesminimum-Temperatur (°C)",
+          "temp_max_sensor": "Tagesmaximum-Temperatur (°C)",
+          "humidity_sensor": "Mittlere relative Luftfeuchte (%) — optional, wenn Taupunkt gesetzt",
+          "dewpoint_sensor": "Taupunkt (°C) — optional, bevorzugt vor Luftfeuchte",
+          "wind_sensor": "Mittlere Windgeschwindigkeit",
+          "wind_unit": "Windgeschwindigkeits-Einheit",
+          "wind_height_m": "Wind-Messhöhe (m)",
+          "solar_sensor": "Sonneneinstrahlung (MJ/m²/Tag) — optional",
+          "rain_sensor": "Tagesniederschlag (mm) — optional",
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
+      "controller": {
+        "title": "Zeitplan-Controller bearbeiten",
+        "description": "Beim Speichern werden die Phasen erneut durchlaufen.",
+        "data": {
+          "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
+          "weather_entity": "Wetter-Entität für die Regenprognose — optional",
+          "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
+        }
+      },
+      "phase": {
+        "title": "Phase {n}",
+        "description": "Wähle die Zonen für diese Phase (bereits verwendete Zonen sind ausgeblendet). Setze den Haken, um eine weitere Phase hinzuzufügen.",
+        "data": {
+          "zones": "Zonen in dieser Phase",
+          "add_another": "Weitere Phase hinzufügen"
+        }
+      }
+    },
+    "error": {
+      "need_humidity_or_dewpoint": "Gib entweder einen Luftfeuchte- oder einen Taupunkt-Sensor an."
+    }
+  },
+  "selector": {
+    "et0_mode": {
+      "options": {
+        "sensor": "Aus einem ET0-Sensor",
+        "calculated": "Aus Wettersensoren berechnen (FAO-56)"
+      }
+    },
+    "wind_unit": {
+      "options": {
+        "ms": "m/s",
+        "kmh": "km/h"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "bucket": { "name": "Wasserspeicher" },
+      "duration": { "name": "Dauer" },
+      "total_runtime": { "name": "Gesamtlaufzeit" },
+      "start_time": { "name": "Startzeit" }
+    },
+    "binary_sensor": {
+      "skip": { "name": "Überspringen (Regenprognose)" }
+    }
+  },
+  "services": {
+    "calculate": {
+      "name": "Berechnen",
+      "description": "Die Zielzone(n) neu berechnen: die tägliche Netto-ET0-Abnahme (einmal pro Kalendertag) anwenden und die Bewässerungsdauer aktualisieren."
+    },
+    "set_bucket": {
+      "name": "Speicher setzen",
+      "description": "Den Boden-Wasserspeicher (mm) der Zielzone(n) setzen.",
+      "fields": {
+        "value": { "name": "Wert", "description": "Neuer Speicherwert in Millimetern." }
+      }
+    },
+    "reset_bucket": {
+      "name": "Speicher zurücksetzen",
+      "description": "Den Speicher der Zielzone(n) auf 0 mm zurücksetzen."
+    },
+    "register_irrigation": {
+      "name": "Bewässerung registrieren",
+      "description": "Festhalten, dass die Zielzone(n) gerade bewässert wurden: Speicher auffüllen und das heutige Datum stempeln (wird vom Mindestintervall der Zone genutzt).",
+      "fields": {
+        "amount_mm": { "name": "Menge (mm)", "description": "Ausgebrachtes Wasser in mm; ohne Angabe wird der Speicher auf 0 gesetzt." }
+      }
+    }
+  }
+}

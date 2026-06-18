@@ -20,7 +20,7 @@ from .const import (
     CONF_LEAD_TIME,
     CONF_MAX_BUCKET,
     CONF_MAX_DURATION,
-    CONF_MIN_DAYS_BETWEEN_RUNS,
+    CONF_MIN_DAYS_BETWEEN,
     CONF_MODE,
     CONF_MULTIPLIER,
     CONF_NAME,
@@ -103,6 +103,10 @@ def _zone_fields(d: dict[str, Any]) -> dict[Any, Any]:
         vol.Required(
             CONF_DRAINAGE, default=d.get(CONF_DRAINAGE, DEFAULTS[CONF_DRAINAGE])
         ): _num("mm/h", minimum=0, maximum=100, step=0.01),
+        vol.Required(
+            CONF_MIN_DAYS_BETWEEN,
+            default=d.get(CONF_MIN_DAYS_BETWEEN, DEFAULTS[CONF_MIN_DAYS_BETWEEN]),
+        ): _num("d", minimum=0, maximum=30, step=1),
     }
 
 
@@ -155,12 +159,6 @@ def _controller_schema(d: dict[str, Any], *, include_name: bool) -> vol.Schema:
             CONF_RAIN_THRESHOLD, default=d.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD])
         )
     ] = _num("mm", minimum=0, maximum=100, step=0.1)
-    fields[
-        vol.Required(
-            CONF_MIN_DAYS_BETWEEN_RUNS,
-            default=d.get(CONF_MIN_DAYS_BETWEEN_RUNS, DEFAULTS[CONF_MIN_DAYS_BETWEEN_RUNS]),
-        )
-    ] = _num("d", minimum=0, maximum=30, step=1)
     return vol.Schema(fields)
 
 
