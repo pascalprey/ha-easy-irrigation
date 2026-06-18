@@ -21,6 +21,7 @@
         "title": "ET0 from a sensor",
         "description": "Provide a sensor with the daily net ET (ET0 minus rainfall) in mm, and the zone parameters.",
         "data": {
+          "valve_entity": "Valve (switch/valve entity) — optional",
           "et0_sensor": "ET0 sensor (daily net ET in mm)",
           "area_m2": "Area (m²)",
           "flow_lpm": "Flow rate (L/min)",
@@ -29,8 +30,7 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations",
-          "stage": "Stage (zones in the same stage run in parallel)"
+          "days_between": "Minimum days between irrigations"
         }
       },
       "calculated": {
@@ -46,6 +46,7 @@
           "wind_height_m": "Wind measurement height (m)",
           "solar_sensor": "Solar radiation (MJ/m²/day) — optional",
           "rain_sensor": "Daily rainfall (mm) — optional",
+          "valve_entity": "Valve (switch/valve entity) — optional",
           "area_m2": "Area (m²)",
           "flow_lpm": "Flow rate (L/min)",
           "max_bucket_mm": "Maximum bucket (mm)",
@@ -53,18 +54,23 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations",
-          "stage": "Stage (zones in the same stage run in parallel)"
+          "days_between": "Minimum days between irrigations"
         }
       },
       "controller": {
         "title": "Schedule controller",
-        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Stages run sequentially; zones sharing a stage run in parallel.",
+        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Assign zones to phases below: phases run one after another, zones in the same phase run in parallel. Leave unused phases empty.",
         "data": {
           "name": "Controller name",
           "sunrise_offset_min": "Finish this many minutes before sunrise",
-          "rain_forecast_sensor": "Rain-forecast sensor (mm) — optional",
-          "rain_threshold_mm": "Skip if forecast rainfall is at least (mm)"
+          "weather_entity": "Weather entity for the rain forecast — optional",
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
+          "phase_1": "Phase 1 — zones",
+          "phase_2": "Phase 2 — zones",
+          "phase_3": "Phase 3 — zones",
+          "phase_4": "Phase 4 — zones",
+          "phase_5": "Phase 5 — zones",
+          "phase_6": "Phase 6 — zones"
         }
       }
     },
@@ -77,6 +83,7 @@
       "sensor": {
         "title": "Edit zone (ET0 from sensor)",
         "data": {
+          "valve_entity": "Valve (switch/valve entity) — optional",
           "et0_sensor": "ET0 sensor (daily net ET in mm)",
           "area_m2": "Area (m²)",
           "flow_lpm": "Flow rate (L/min)",
@@ -85,8 +92,7 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations",
-          "stage": "Stage (zones in the same stage run in parallel)"
+          "days_between": "Minimum days between irrigations"
         }
       },
       "calculated": {
@@ -101,6 +107,7 @@
           "wind_height_m": "Wind measurement height (m)",
           "solar_sensor": "Solar radiation (MJ/m²/day) — optional",
           "rain_sensor": "Daily rainfall (mm) — optional",
+          "valve_entity": "Valve (switch/valve entity) — optional",
           "area_m2": "Area (m²)",
           "flow_lpm": "Flow rate (L/min)",
           "max_bucket_mm": "Maximum bucket (mm)",
@@ -108,16 +115,21 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations",
-          "stage": "Stage (zones in the same stage run in parallel)"
+          "days_between": "Minimum days between irrigations"
         }
       },
       "controller": {
         "title": "Edit schedule controller",
         "data": {
           "sunrise_offset_min": "Finish this many minutes before sunrise",
-          "rain_forecast_sensor": "Rain-forecast sensor (mm) — optional",
-          "rain_threshold_mm": "Skip if forecast rainfall is at least (mm)"
+          "weather_entity": "Weather entity for the rain forecast — optional",
+          "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
+          "phase_1": "Phase 1 — zones",
+          "phase_2": "Phase 2 — zones",
+          "phase_3": "Phase 3 — zones",
+          "phase_4": "Phase 4 — zones",
+          "phase_5": "Phase 5 — zones",
+          "phase_6": "Phase 6 — zones"
         }
       }
     },

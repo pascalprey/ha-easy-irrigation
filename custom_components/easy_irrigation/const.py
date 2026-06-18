@@ -34,6 +34,7 @@ WIND_UNIT_KMH = "kmh"
 
 # Per-zone parameters
 CONF_NAME = "name"
+CONF_VALVE_ENTITY = "valve_entity"
 CONF_AREA = "area_m2"
 CONF_FLOW = "flow_lpm"
 CONF_MAX_BUCKET = "max_bucket_mm"
@@ -42,12 +43,21 @@ CONF_MULTIPLIER = "multiplier"
 CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
 CONF_DAYS_BETWEEN = "days_between"
-CONF_STAGE = "stage"
 
 # Schedule controller parameters
 CONF_SUNRISE_OFFSET = "sunrise_offset_min"
-CONF_RAIN_FORECAST_SENSOR = "rain_forecast_sensor"
+CONF_WEATHER_ENTITY = "weather_entity"
 CONF_RAIN_THRESHOLD = "rain_threshold_mm"
+
+# Number of phase slots offered by the controller. Phases run sequentially;
+# zones within a phase run in parallel. Empty slots are ignored.
+PHASE_COUNT = 6
+
+
+def phase_key(index: int) -> str:
+    """Config key for phase ``index`` (1-based)."""
+    return f"phase_{index}"
+
 
 # Defaults (neutral, must be adjusted per zone / controller)
 DEFAULTS: dict[str, float] = {
@@ -59,7 +69,6 @@ DEFAULTS: dict[str, float] = {
     CONF_LEAD_TIME: 0.0,
     CONF_DRAINAGE: 0.0,
     CONF_DAYS_BETWEEN: 0.0,
-    CONF_STAGE: 1.0,
     CONF_WIND_HEIGHT: 10.0,
     CONF_SUNRISE_OFFSET: 30.0,
     CONF_RAIN_THRESHOLD: 2.0,

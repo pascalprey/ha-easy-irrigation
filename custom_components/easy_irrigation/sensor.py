@@ -157,6 +157,7 @@ class TotalRuntimeSensor(_ControllerSensorBase):
             "stage_durations": {str(k): v for k, v in self._controller.stage_durations.items()},
             "stage_offsets": {str(k): v for k, v in self._controller.stage_offsets.items()},
             "skip": self._controller.skip,
+            "plan": self._controller.plan,
         }
 
 
