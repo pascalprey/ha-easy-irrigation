@@ -29,8 +29,7 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "drainage_rate": "Drainage rate (mm/h at saturation)"
         }
       },
       "calculated": {
@@ -53,24 +52,26 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "drainage_rate": "Drainage rate (mm/h at saturation)"
         }
       },
       "controller": {
         "title": "Schedule controller",
-        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Assign zones to phases below: phases run one after another, zones in the same phase run in parallel. Leave unused phases empty.",
+        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Next you assign zones to phases.",
         "data": {
           "name": "Controller name",
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "weather_entity": "Weather entity for the rain forecast — optional",
           "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
-          "phase_1": "Phase 1 — zones",
-          "phase_2": "Phase 2 — zones",
-          "phase_3": "Phase 3 — zones",
-          "phase_4": "Phase 4 — zones",
-          "phase_5": "Phase 5 — zones",
-          "phase_6": "Phase 6 — zones"
+          "min_days_between_runs": "Minimum days between watering runs (0 = no limit)"
+        }
+      },
+      "phase": {
+        "title": "Phase {n}",
+        "description": "Pick the zones for this phase (zones already used in earlier phases are hidden). Zones in a phase run in parallel; phases run one after another. Tick the box to add a further phase.",
+        "data": {
+          "zones": "Zones in this phase",
+          "add_another": "Add another phase"
         }
       }
     },
@@ -91,8 +92,7 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "drainage_rate": "Drainage rate (mm/h at saturation)"
         }
       },
       "calculated": {
@@ -114,22 +114,25 @@
           "multiplier": "Multiplier",
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
-          "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "drainage_rate": "Drainage rate (mm/h at saturation)"
         }
       },
       "controller": {
         "title": "Edit schedule controller",
+        "description": "Saving re-walks the phase assignment.",
         "data": {
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "weather_entity": "Weather entity for the rain forecast — optional",
           "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)",
-          "phase_1": "Phase 1 — zones",
-          "phase_2": "Phase 2 — zones",
-          "phase_3": "Phase 3 — zones",
-          "phase_4": "Phase 4 — zones",
-          "phase_5": "Phase 5 — zones",
-          "phase_6": "Phase 6 — zones"
+          "min_days_between_runs": "Minimum days between watering runs (0 = no limit)"
+        }
+      },
+      "phase": {
+        "title": "Phase {n}",
+        "description": "Pick the zones for this phase (zones already used in earlier phases are hidden). Tick the box to add a further phase.",
+        "data": {
+          "zones": "Zones in this phase",
+          "add_another": "Add another phase"
         }
       }
     },
@@ -177,6 +180,13 @@
     "reset_bucket": {
       "name": "Reset bucket",
       "description": "Reset the bucket to 0 mm for the targeted zone(s)."
+    },
+    "register_irrigation": {
+      "name": "Register irrigation",
+      "description": "Record that the targeted zone(s) were just watered: refill the bucket and stamp today's date (used by the controller's minimum interval).",
+      "fields": {
+        "amount_mm": { "name": "Amount (mm)", "description": "Water applied in mm; if omitted the bucket is reset to 0." }
+      }
     }
   }
 }

@@ -206,3 +206,19 @@ class EasyIrrigationCoordinator:
     async def async_reset_bucket(self) -> None:
         """Reset the bucket to 0 mm."""
         await self.async_set_bucket(0.0)
+
+    async def async_register_irrigation(self, amount: float | None = None) -> None:
+        """Record that this zone was just watered.
+
+        Refills the bucket (``amount`` mm if given, capped at the maximum;
+        otherwise fully back to 0) and stamps today's date - the schedule
+        controller uses the latest such date for the global minimum interval.
+        """
+        if amount is None:
+            self.bucket = 0.0
+        else:
+            self.bucket = min(self.bucket + float(amount), float(self.config[CONF_MAX_BUCKET]))
+        self.last_irrigation_date = dt_util.now().date().isoformat()
+        self._recompute_duration()
+        await self._async_save()
+        self._notify()

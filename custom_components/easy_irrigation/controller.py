@@ -1,16 +1,17 @@
 """Schedule controller: aggregates due zones into a watering plan.
 
 Plan-only: it computes the total runtime, per-phase offsets and the start time
-(so watering finishes ``sunrise_offset`` minutes before sunrise), plus a
-weather-based skip flag. It does not switch any valves - the user's automations
-consume these entities. The plan exposes, per phase, each zone's valve entity.
+(so watering finishes ``sunrise_offset`` minutes before sunrise), a weather-based
+skip flag, and enforces a global minimum interval between watering runs (handy
+for a shared pump). It does not switch any valves - the user's automations
+consume these entities.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import date, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -19,13 +20,13 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_MIN_DAYS_BETWEEN_RUNS,
     CONF_RAIN_THRESHOLD,
     CONF_SUNRISE_OFFSET,
     CONF_VALVE_ENTITY,
     CONF_WEATHER_ENTITY,
     DEFAULTS,
-    PHASE_COUNT,
-    phase_key,
+    phases_from_config,
 )
 from .schedule_math import compute_schedule
 
@@ -44,6 +45,8 @@ class ScheduleController:
         self.total: float = 0.0
         self.start_epoch: float | None = None
         self.skip: bool = False
+        self.blocked: bool = False
+        self.next_allowed_epoch: float | None = None
         self.stage_durations: dict[int, float] = {}
         self.stage_offsets: dict[int, float] = {}
         self.plan: list[dict] = []
@@ -83,14 +86,9 @@ class ScheduleController:
             cb()
 
     def _phases(self) -> dict[int, list[str]]:
-        """Configured phases -> {phase_index: [zone duration-sensor entity_ids]}."""
-        cfg = self.config
-        phases: dict[int, list[str]] = {}
-        for i in range(1, PHASE_COUNT + 1):
-            zones = cfg.get(phase_key(i)) or []
-            if zones:
-                phases[i] = list(zones)
-        return phases
+        """Configured phases -> {position (1-based): [zone duration-sensor ids]}."""
+        phases_list = phases_from_config(self.config)
+        return {i: list(zones) for i, zones in enumerate(phases_list, start=1) if zones}
 
     def _read_duration(self, sensor_id: str) -> float:
         state = self.hass.states.get(sensor_id)
@@ -101,14 +99,31 @@ class ScheduleController:
         except (ValueError, TypeError):
             return 0.0
 
-    def _valve_for(self, sensor_id: str) -> str | None:
+    def _zone_entry(self, sensor_id: str) -> ConfigEntry | None:
         entity = er.async_get(self.hass).async_get(sensor_id)
         if entity is None or entity.config_entry_id is None:
             return None
-        zone_entry = self.hass.config_entries.async_get_entry(entity.config_entry_id)
+        return self.hass.config_entries.async_get_entry(entity.config_entry_id)
+
+    def _valve_for(self, sensor_id: str) -> str | None:
+        zone_entry = self._zone_entry(sensor_id)
         if zone_entry is None:
             return None
         return {**zone_entry.data, **zone_entry.options}.get(CONF_VALVE_ENTITY)
+
+    def _last_run_date(self, phases: dict[int, list[str]]) -> date | None:
+        """Latest 'last irrigation' date across all zones in the plan."""
+        latest: date | None = None
+        for sensors in phases.values():
+            for sensor_id in sensors:
+                zone_entry = self._zone_entry(sensor_id)
+                coordinator = getattr(zone_entry, "runtime_data", None) if zone_entry else None
+                iso = getattr(coordinator, "last_irrigation_date", None) if coordinator else None
+                if iso:
+                    parsed = dt_util.parse_date(iso)
+                    if parsed and (latest is None or parsed > latest):
+                        latest = parsed
+        return latest
 
     def _next_sunrise_epoch(self) -> float | None:
         sun = self.hass.states.get("sun.sun")
@@ -144,10 +159,39 @@ class ScheduleController:
         threshold = float(cfg.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD]))
         return rain >= threshold
 
+    def _check_blocked(self, phases: dict[int, list[str]]) -> tuple[bool, float | None]:
+        """Global minimum interval: block the plan if a run was too recent."""
+        min_days = int(float(self.config.get(CONF_MIN_DAYS_BETWEEN_RUNS, 0)))
+        if min_days <= 0:
+            return False, None
+        last_run = self._last_run_date(phases)
+        if last_run is None:
+            return False, None
+        if (dt_util.now().date() - last_run).days < min_days:
+            next_allowed = dt_util.start_of_local_day(last_run + timedelta(days=min_days))
+            return True, next_allowed.timestamp()
+        return False, None
+
     async def async_recompute(self) -> None:
-        """Rebuild the plan from the current zone durations and forecast."""
+        """Rebuild the plan from the current zone durations, forecast and interval."""
         cfg = self.config
         phases = self._phases()
+        self.skip = await self._async_should_skip()
+
+        blocked, next_allowed = self._check_blocked(phases)
+        if blocked:
+            self.blocked = True
+            self.next_allowed_epoch = next_allowed
+            self.total = 0.0
+            self.start_epoch = None
+            self.stage_durations = {}
+            self.stage_offsets = {}
+            self.plan = []
+            self._notify()
+            return
+
+        self.blocked = False
+        self.next_allowed_epoch = None
 
         stages: dict[int, list[float]] = {}
         for index, sensors in phases.items():
@@ -189,6 +233,4 @@ class ScheduleController:
                     }
                 )
         self.plan = plan
-
-        self.skip = await self._async_should_skip()
         self._notify()

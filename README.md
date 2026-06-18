@@ -7,8 +7,7 @@ net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, compu
 that zone needs to be watered. The actual valve switching stays in **your** automations - this
 integration is the "brain" (buckets + durations + a start plan), not the "hands".
 
-> **Status:** early (v0.3). One zone = one config entry; a schedule controller is a separate
-> entry. See the roadmap below.
+> **Status:** v0.4. One zone = one config entry; a schedule controller is a separate entry.
 
 ## Why
 
@@ -55,14 +54,8 @@ rest:
 
 ### Mode B - Computed from weather sensors (FAO-56)
 Compute ET0 locally with the FAO-56 Penman-Monteith method from your own **daily-aggregated**
-weather sensors. Required: daily minimum & maximum temperature, mean wind speed, and either a
-mean relative-humidity or a dew-point sensor. Optional: solar radiation (MJ/m^2/day; otherwise
-estimated from the temperature range) and daily rainfall (to get net ET). Latitude and
-elevation are taken from Home Assistant's configuration.
-
-> Daily min/max/mean inputs are easiest to produce with native HA helpers (e.g. a
-> `statistics` sensor with `value_max` / `value_min` / `mean` over 24 h). The integration does
-> **not** buffer intraday samples itself.
+weather sensors (Tmin/Tmax, mean wind, and humidity or dew point; optional solar radiation and
+rainfall). Latitude and elevation are taken from Home Assistant's configuration.
 
 ### Zone parameters (both modes)
 
@@ -73,41 +66,27 @@ elevation are taken from Home Assistant's configuration.
 | Flow rate (L/min) | Combined output of the zone's emitters. |
 | Maximum bucket (mm) | Cap for the water reserve. |
 | Multiplier | Per-zone duration scaling (crop / efficiency factor). |
-| Lead time (s) | Fixed time added to every run (valve-open delay, etc.). |
+| Lead time (s) | Fixed time added to every run. |
 | Maximum duration (s) | Hard cap on a single run. |
 | Drainage rate (mm/h) | Optional drainage of excess near saturation (`0` = off). |
-| Min days between irrigations | Optional gate for the (future) scheduler enforcement. |
 
 Each zone exposes `sensor.<zone>_bucket` (mm) and `sensor.<zone>_duration` (s), plus the
-services `easy_irrigation.calculate`, `set_bucket` and `reset_bucket`.
+services `easy_irrigation.calculate`, `set_bucket`, `reset_bucket` and `register_irrigation`.
 
-## How the maths works
+### Maths
 
-Once per calendar day, per zone:
-
-```
-bucket = min(bucket - net_ET0, max_bucket)        # deplete by the day's net ET
-```
-
-On every `calculate` call the duration is recomputed from the current bucket:
-
-```
-if bucket < 0:
-    precipitation_rate = flow_lpm * 60 / area_m2            # mm/h
-    duration = |bucket| / precipitation_rate * 3600 * multiplier + lead_time
-    duration = min(duration, max_duration)
-else:
-    duration = 0
-```
-
-ET0 is applied **only once per calendar day**, so you can call `calculate` as often as you
-like during the day (e.g. after rain) without double-counting.
+Once per calendar day, per zone: `bucket = min(bucket - net_ET0, max_bucket)`. On every
+`calculate` the duration is recomputed: when `bucket < 0`,
+`duration = |bucket| / (flow_lpm*60/area_m2) * 3600 * multiplier + lead_time` (capped at
+`max_duration`), else `0`. ET0 is applied **only once per calendar day**, so you can call
+`calculate` as often as you like without double-counting.
 
 ## Schedule controller
 
-Add a second entry of type **schedule controller** to turn the per-zone durations into a start
-plan. The controller offers up to **6 phases**; assign zones to each phase. Phases run one
-after another, and zones within a phase run in parallel:
+Add a second entry of type **schedule controller**. After the controller settings you assign
+zones to **phases** one at a time ("add another phase?") - so you create exactly as many phases
+as you need, and zones already used are hidden from later phases. Phases run one after another;
+zones within a phase run in parallel:
 
 ```
 phase_runtime = max(durations of due zones in that phase)
@@ -117,32 +96,39 @@ start_time    = next_sunrise - sunrise_offset - total_runtime
 
 It exposes (plan only - it does not switch valves):
 
-- `sensor.<controller>_total_runtime` (s) - attributes include `stage_durations`,
-  `stage_offsets` and a full `plan` (per phase: offset, duration and each zone's valve).
-- `sensor.<controller>_start_time` (timestamp) - when to start so watering finishes on time.
-- `binary_sensor.<controller>_skip` - on when the configured **weather entity**'s daily
-  forecast rainfall is at or above the threshold (independent of the ET0 source).
+- `sensor.<controller>_total_runtime` (s) - attributes: `stage_durations`, `stage_offsets`,
+  `skip`, `blocked`, `next_allowed`, and a full `plan` (per phase: offset, duration, each
+  zone's valve).
+- `sensor.<controller>_phase_<n>` (s) - per-phase runtime, named `Phase n (zone, zone)`.
+- `sensor.<controller>_start_time` (timestamp) - when to start.
+- `binary_sensor.<controller>_skip` - on when the **weather entity**'s daily forecast rainfall
+  is at or above the threshold.
 
-Your own automation triggers at `start_time` (when `skip` is off), reads the `plan` attribute
-and opens each phase's valves for their durations.
+### Minimum days between runs (shared pump)
+The controller has a global **minimum interval**. After watering, your automation calls
+`easy_irrigation.register_irrigation` on each watered zone (refills its bucket and stamps the
+date). The controller takes the latest such date as the "last run"; until `min_days` have
+passed it reports `blocked` and produces no plan (`total_runtime` 0, `start_time` empty,
+`next_allowed` shows when it unblocks). This batches watering onto fewer nights - easier on a
+groundwater pump.
+
+Your automation triggers at `start_time` (when `skip` is off), reads the `plan` attribute and
+opens each phase's valves for their durations, then calls `register_irrigation` per zone.
 
 ## Development
 
 The FAO-56 maths (`et0.py`) and the scheduling maths (`schedule_math.py`) have no Home
-Assistant dependencies and are unit-tested:
-
-```bash
-pytest tests/
-```
+Assistant dependencies and are unit-tested: `pytest tests/`.
 
 ## Roadmap
 
-- [x] In-house FAO-56 ET0 from local weather sensors (Mode B), using HA's configured location.
-- [x] Multi-zone scheduler: finish at `sunrise - offset`; phases = parallel groups, total = sum.
-- [x] Weather-based skip from a weather entity's rain forecast, independent of the ET0 source.
+- [x] In-house FAO-56 ET0 from local weather sensors (Mode B).
+- [x] Multi-zone scheduler: finish at `sunrise - offset`; phases = parallel groups.
+- [x] On-demand phases (add as many as needed) with duplicate-zone exclusion + per-phase
+      entities named `Phase n (zones)`.
+- [x] Weather-based skip from a weather entity's rain forecast.
 - [x] Per-zone valve entity, surfaced in the controller's plan.
-- [ ] `register_irrigation` service (post-watering bucket refill) + enforce minimum days
-      between irrigations.
+- [x] `register_irrigation` service + global minimum days between runs.
 - [ ] Optional built-in valve execution.
 - [ ] Number entities for live per-zone tuning.
 

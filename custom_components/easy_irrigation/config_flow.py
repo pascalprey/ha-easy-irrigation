@@ -9,8 +9,8 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFl
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ADD_ANOTHER,
     CONF_AREA,
-    CONF_DAYS_BETWEEN,
     CONF_DEWPOINT_SENSOR,
     CONF_DRAINAGE,
     CONF_ENTRY_TYPE,
@@ -20,9 +20,12 @@ from .const import (
     CONF_LEAD_TIME,
     CONF_MAX_BUCKET,
     CONF_MAX_DURATION,
+    CONF_MIN_DAYS_BETWEEN_RUNS,
     CONF_MODE,
     CONF_MULTIPLIER,
     CONF_NAME,
+    CONF_PHASE_ZONES,
+    CONF_PHASES,
     CONF_RAIN_SENSOR,
     CONF_RAIN_THRESHOLD,
     CONF_SOLAR_SENSOR,
@@ -40,10 +43,8 @@ from .const import (
     ENTRY_TYPE_ZONE,
     MODE_CALCULATED,
     MODE_SENSOR,
-    PHASE_COUNT,
     WIND_UNIT_KMH,
     WIND_UNIT_MS,
-    phase_key,
 )
 
 
@@ -66,15 +67,6 @@ def _sensor() -> selector.EntitySelector:
 def _valve() -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(domain=["switch", "valve"])
-    )
-
-
-def _zone_picker() -> selector.EntitySelector:
-    """Multi-select of this integration's zone duration sensors."""
-    return selector.EntitySelector(
-        selector.EntitySelectorConfig(
-            domain="sensor", integration=DOMAIN, device_class="duration", multiple=True
-        )
     )
 
 
@@ -111,9 +103,6 @@ def _zone_fields(d: dict[str, Any]) -> dict[Any, Any]:
         vol.Required(
             CONF_DRAINAGE, default=d.get(CONF_DRAINAGE, DEFAULTS[CONF_DRAINAGE])
         ): _num("mm/h", minimum=0, maximum=100, step=0.01),
-        vol.Required(
-            CONF_DAYS_BETWEEN, default=d.get(CONF_DAYS_BETWEEN, DEFAULTS[CONF_DAYS_BETWEEN])
-        ): _num("d", minimum=0, maximum=30, step=1),
     }
 
 
@@ -166,15 +155,65 @@ def _controller_schema(d: dict[str, Any], *, include_name: bool) -> vol.Schema:
             CONF_RAIN_THRESHOLD, default=d.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD])
         )
     ] = _num("mm", minimum=0, maximum=100, step=0.1)
-    for i in range(1, PHASE_COUNT + 1):
-        fields[_opt(phase_key(i), d)] = _zone_picker()
+    fields[
+        vol.Required(
+            CONF_MIN_DAYS_BETWEEN_RUNS,
+            default=d.get(CONF_MIN_DAYS_BETWEEN_RUNS, DEFAULTS[CONF_MIN_DAYS_BETWEEN_RUNS]),
+        )
+    ] = _num("d", minimum=0, maximum=30, step=1)
     return vol.Schema(fields)
+
+
+def _phase_schema(
+    exclude: list[str], default_zones: list[str], add_default: bool
+) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Optional(CONF_PHASE_ZONES, default=default_zones): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor",
+                    integration=DOMAIN,
+                    device_class="duration",
+                    multiple=True,
+                    exclude_entities=exclude,
+                )
+            ),
+            vol.Required(CONF_ADD_ANOTHER, default=add_default): selector.BooleanSelector(),
+        }
+    )
 
 
 def _validate_calculated(user_input: dict[str, Any]) -> dict[str, str]:
     if not user_input.get(CONF_HUMIDITY_SENSOR) and not user_input.get(CONF_DEWPOINT_SENSOR):
         return {"base": "need_humidity_or_dewpoint"}
     return {}
+
+
+def _phase_step(flow: Any, user_input: dict[str, Any] | None, *, create_title: str | None):
+    """Shared phase-loop body for the config and options flows."""
+    if user_input is not None:
+        zones = user_input.get(CONF_PHASE_ZONES) or []
+        if zones:
+            flow._phases.append(zones)
+        if user_input.get(CONF_ADD_ANOTHER):
+            flow._phase_idx += 1
+            return None  # caller re-enters async_step_phase
+        data = {**flow._ctrl, CONF_PHASES: flow._phases}
+        title = create_title if create_title is not None else ""
+        return flow.async_create_entry(title=title, data=data)
+
+    used = [s for phase in flow._phases for s in phase]
+    default_zones = (
+        flow._existing_phases[flow._phase_idx]
+        if flow._phase_idx < len(flow._existing_phases)
+        else []
+    )
+    add_default = (flow._phase_idx + 1) < len(flow._existing_phases)
+    return flow.async_show_form(
+        step_id="phase",
+        data_schema=_phase_schema(used, default_zones, add_default),
+        description_placeholders={"n": str(len(flow._phases) + 1)},
+    )
 
 
 class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -184,6 +223,10 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._base: dict[str, Any] = {}
+        self._ctrl: dict[str, Any] = {}
+        self._phases: list[list[str]] = []
+        self._existing_phases: list[list[str]] = []
+        self._phase_idx: int = 0
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -242,13 +285,22 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(
-                title=user_input[CONF_NAME],
-                data={**user_input, CONF_ENTRY_TYPE: ENTRY_TYPE_CONTROLLER},
-            )
+            self._ctrl = {**user_input, CONF_ENTRY_TYPE: ENTRY_TYPE_CONTROLLER}
+            self._phases = []
+            self._existing_phases = []
+            self._phase_idx = 0
+            return await self.async_step_phase()
         return self.async_show_form(
             step_id="controller", data_schema=_controller_schema({}, include_name=True)
         )
+
+    async def async_step_phase(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        result = _phase_step(self, user_input, create_title=self._ctrl.get(CONF_NAME))
+        if result is None:
+            return await self.async_step_phase()
+        return result
 
     @staticmethod
     def async_get_options_flow(config_entry) -> OptionsFlow:
@@ -256,7 +308,13 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class EasyIrrigationOptionsFlow(OptionsFlow):
-    """Edit a zone or controller after setup (type is fixed at creation)."""
+    """Edit a zone or controller after setup (type is fixed at creation).
+
+    The phase-loop attributes (``_ctrl``, ``_phases``, ``_existing_phases``,
+    ``_phase_idx``) are initialised in :meth:`async_step_controller` before the
+    loop is entered, so no custom ``__init__`` (which could interfere with the
+    framework-managed ``config_entry``) is needed.
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -295,9 +353,22 @@ class EasyIrrigationOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            self._ctrl = user_input
+            self._phases = []
+            current = {**self.config_entry.data, **self.config_entry.options}
+            self._existing_phases = current.get(CONF_PHASES) or []
+            self._phase_idx = 0
+            return await self.async_step_phase()
         current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="controller",
             data_schema=_controller_schema(current, include_name=False),
         )
+
+    async def async_step_phase(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        result = _phase_step(self, user_input, create_title=None)
+        if result is None:
+            return await self.async_step_phase()
+        return result

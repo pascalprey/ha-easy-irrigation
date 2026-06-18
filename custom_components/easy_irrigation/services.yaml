@@ -35,3 +35,28 @@ reset_bucket:
     entity:
       integration: easy_irrigation
       domain: sensor
+
+register_irrigation:
+  name: Register irrigation
+  description: >-
+    Record that the targeted zone(s) were just watered: refill the bucket and
+    stamp today's date. The schedule controller uses the latest such date for
+    the global minimum interval between runs.
+  target:
+    entity:
+      integration: easy_irrigation
+      domain: sensor
+  fields:
+    amount_mm:
+      name: Amount (mm)
+      description: >-
+        Water applied, in mm. If omitted, the bucket is reset to 0 (deficit
+        fully replenished).
+      required: false
+      example: 8
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 0.1
+          unit_of_measurement: mm

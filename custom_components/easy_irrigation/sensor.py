@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import (
     AddEntitiesCallback,
@@ -20,9 +21,23 @@ from homeassistant.helpers.entity_platform import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_CONTROLLER
+from .const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_CONTROLLER, phases_from_config
 from .controller import ScheduleController
 from .coordinator import EasyIrrigationCoordinator
+
+
+def _zone_name(hass: HomeAssistant, sensor_id: str) -> str:
+    """Human-readable zone name for a zone duration-sensor entity_id."""
+    entity = er.async_get(hass).async_get(sensor_id)
+    if entity is not None and entity.config_entry_id is not None:
+        entry = hass.config_entries.async_get_entry(entity.config_entry_id)
+        if entry is not None and entry.title:
+            prefix = "Easy Irrigation "
+            return entry.title[len(prefix):] if entry.title.startswith(prefix) else entry.title
+    state = hass.states.get(sensor_id)
+    if state is not None:
+        return state.attributes.get("friendly_name", sensor_id)
+    return sensor_id
 
 
 async def async_setup_entry(
@@ -33,9 +48,16 @@ async def async_setup_entry(
     """Set up the sensors for a zone or a schedule controller."""
     if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CONTROLLER:
         controller: ScheduleController = entry.runtime_data
-        async_add_entities(
-            [TotalRuntimeSensor(controller, entry), StartTimeSensor(controller, entry)]
-        )
+        entities: list[SensorEntity] = [
+            TotalRuntimeSensor(controller, entry),
+            StartTimeSensor(controller, entry),
+        ]
+        phases = phases_from_config({**entry.data, **entry.options})
+        for index, zone_sensors in enumerate(phases, start=1):
+            names = [_zone_name(hass, s) for s in zone_sensors]
+            label = f"Phase {index} ({', '.join(names)})" if names else f"Phase {index}"
+            entities.append(PhaseDurationSensor(controller, entry, index, label))
+        async_add_entities(entities)
         return
 
     coordinator: EasyIrrigationCoordinator = entry.runtime_data
@@ -47,6 +69,11 @@ async def async_setup_entry(
         "set_bucket", {vol.Required("value"): vol.Coerce(float)}, "async_service_set_bucket"
     )
     platform.async_register_entity_service("reset_bucket", None, "async_service_reset_bucket")
+    platform.async_register_entity_service(
+        "register_irrigation",
+        {vol.Optional("amount_mm"): vol.Coerce(float)},
+        "async_service_register_irrigation",
+    )
 
 
 # --- Zone sensors ---------------------------------------------------------
@@ -78,6 +105,9 @@ class _ZoneSensorBase(SensorEntity):
 
     async def async_service_reset_bucket(self) -> None:
         await self._coordinator.async_reset_bucket()
+
+    async def async_service_register_irrigation(self, amount_mm: float | None = None) -> None:
+        await self._coordinator.async_register_irrigation(amount_mm)
 
 
 class BucketSensor(_ZoneSensorBase):
@@ -136,7 +166,7 @@ class _ControllerSensorBase(SensorEntity):
 
 
 class TotalRuntimeSensor(_ControllerSensorBase):
-    """Total watering runtime across all due zones/stages."""
+    """Total watering runtime across all due phases."""
 
     _attr_translation_key = "total_runtime"
     _attr_device_class = SensorDeviceClass.DURATION
@@ -153,10 +183,17 @@ class TotalRuntimeSensor(_ControllerSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict:
+        next_allowed = None
+        if self._controller.next_allowed_epoch is not None:
+            next_allowed = dt_util.utc_from_timestamp(
+                self._controller.next_allowed_epoch
+            ).isoformat()
         return {
             "stage_durations": {str(k): v for k, v in self._controller.stage_durations.items()},
             "stage_offsets": {str(k): v for k, v in self._controller.stage_offsets.items()},
             "skip": self._controller.skip,
+            "blocked": self._controller.blocked,
+            "next_allowed": next_allowed,
             "plan": self._controller.plan,
         }
 
@@ -178,3 +215,23 @@ class StartTimeSensor(_ControllerSensorBase):
         if epoch is None or self._controller.total <= 0:
             return None
         return dt_util.utc_from_timestamp(epoch)
+
+
+class PhaseDurationSensor(_ControllerSensorBase):
+    """Runtime of one phase (longest due zone in that phase), in seconds."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_icon = "mdi:timer-outline"
+
+    def __init__(
+        self, controller: ScheduleController, entry: ConfigEntry, index: int, label: str
+    ) -> None:
+        super().__init__(controller, entry)
+        self._index = index
+        self._attr_name = label
+        self._attr_unique_id = f"{entry.entry_id}_phase_{index}"
+
+    @property
+    def native_value(self) -> int:
+        return int(self._controller.stage_durations.get(self._index, 0))

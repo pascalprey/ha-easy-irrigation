@@ -42,21 +42,34 @@ CONF_MAX_DURATION = "max_duration_s"
 CONF_MULTIPLIER = "multiplier"
 CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
-CONF_DAYS_BETWEEN = "days_between"
 
 # Schedule controller parameters
 CONF_SUNRISE_OFFSET = "sunrise_offset_min"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_RAIN_THRESHOLD = "rain_threshold_mm"
+CONF_MIN_DAYS_BETWEEN_RUNS = "min_days_between_runs"
+CONF_PHASES = "phases"  # list[list[zone duration-sensor entity_id]]
 
-# Number of phase slots offered by the controller. Phases run sequentially;
-# zones within a phase run in parallel. Empty slots are ignored.
-PHASE_COUNT = 6
+# Flow-only keys (collected during the phase loop, never stored verbatim)
+CONF_PHASE_ZONES = "zones"
+CONF_ADD_ANOTHER = "add_another"
 
+def phases_from_config(cfg: dict) -> list[list[str]]:
+    """Return the controller's phases as a list of zone-sensor lists.
 
-def phase_key(index: int) -> str:
-    """Config key for phase ``index`` (1-based)."""
-    return f"phase_{index}"
+    Prefers the v0.4 ``phases`` list; falls back to the legacy v0.3.x
+    ``phase_1`` / ``phase_2`` / ... keys so existing controllers keep working
+    after an update (until the controller is edited and re-saved).
+    """
+    explicit = cfg.get(CONF_PHASES)
+    if explicit is not None:
+        return [list(phase) for phase in explicit]
+    legacy: list[list[str]] = []
+    for i in range(1, 13):
+        zones = cfg.get(f"phase_{i}")
+        if zones:
+            legacy.append(list(zones))
+    return legacy
 
 
 # Defaults (neutral, must be adjusted per zone / controller)
@@ -68,8 +81,8 @@ DEFAULTS: dict[str, float] = {
     CONF_MULTIPLIER: 1.0,
     CONF_LEAD_TIME: 0.0,
     CONF_DRAINAGE: 0.0,
-    CONF_DAYS_BETWEEN: 0.0,
     CONF_WIND_HEIGHT: 10.0,
     CONF_SUNRISE_OFFSET: 30.0,
     CONF_RAIN_THRESHOLD: 2.0,
+    CONF_MIN_DAYS_BETWEEN_RUNS: 0.0,
 }
