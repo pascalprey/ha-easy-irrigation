@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Easy Irrigation",
+        "description": "Add a watering zone, or a schedule controller that aggregates your zones into a start plan.",
+        "menu_options": {
+          "zone": "Add a watering zone",
+          "controller": "Add a schedule controller"
+        }
+      },
+      "zone": {
         "title": "Add irrigation zone",
         "description": "Name the zone and choose how its evapotranspiration is obtained.",
         "data": {
@@ -21,7 +29,8 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "days_between": "Minimum days between irrigations",
+          "stage": "Stage (zones in the same stage run in parallel)"
         }
       },
       "calculated": {
@@ -44,7 +53,18 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "days_between": "Minimum days between irrigations",
+          "stage": "Stage (zones in the same stage run in parallel)"
+        }
+      },
+      "controller": {
+        "title": "Schedule controller",
+        "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. Stages run sequentially; zones sharing a stage run in parallel.",
+        "data": {
+          "name": "Controller name",
+          "sunrise_offset_min": "Finish this many minutes before sunrise",
+          "rain_forecast_sensor": "Rain-forecast sensor (mm) — optional",
+          "rain_threshold_mm": "Skip if forecast rainfall is at least (mm)"
         }
       }
     },
@@ -65,7 +85,8 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "days_between": "Minimum days between irrigations",
+          "stage": "Stage (zones in the same stage run in parallel)"
         }
       },
       "calculated": {
@@ -87,7 +108,16 @@
           "lead_time_s": "Lead time (s)",
           "max_duration_s": "Maximum duration (s)",
           "drainage_rate": "Drainage rate (mm/h at saturation)",
-          "days_between": "Minimum days between irrigations"
+          "days_between": "Minimum days between irrigations",
+          "stage": "Stage (zones in the same stage run in parallel)"
+        }
+      },
+      "controller": {
+        "title": "Edit schedule controller",
+        "data": {
+          "sunrise_offset_min": "Finish this many minutes before sunrise",
+          "rain_forecast_sensor": "Rain-forecast sensor (mm) — optional",
+          "rain_threshold_mm": "Skip if forecast rainfall is at least (mm)"
         }
       }
     },
@@ -112,7 +142,12 @@
   "entity": {
     "sensor": {
       "bucket": { "name": "Bucket" },
-      "duration": { "name": "Duration" }
+      "duration": { "name": "Duration" },
+      "total_runtime": { "name": "Total runtime" },
+      "start_time": { "name": "Start time" }
+    },
+    "binary_sensor": {
+      "skip": { "name": "Skip (rain forecast)" }
     }
   },
   "services": {

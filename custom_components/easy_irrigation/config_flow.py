@@ -13,6 +13,7 @@ from .const import (
     CONF_DAYS_BETWEEN,
     CONF_DEWPOINT_SENSOR,
     CONF_DRAINAGE,
+    CONF_ENTRY_TYPE,
     CONF_ET0_SENSOR,
     CONF_FLOW,
     CONF_HUMIDITY_SENSOR,
@@ -22,8 +23,12 @@ from .const import (
     CONF_MODE,
     CONF_MULTIPLIER,
     CONF_NAME,
+    CONF_RAIN_FORECAST_SENSOR,
     CONF_RAIN_SENSOR,
+    CONF_RAIN_THRESHOLD,
     CONF_SOLAR_SENSOR,
+    CONF_STAGE,
+    CONF_SUNRISE_OFFSET,
     CONF_TEMP_MAX_SENSOR,
     CONF_TEMP_MIN_SENSOR,
     CONF_WIND_HEIGHT,
@@ -31,6 +36,8 @@ from .const import (
     CONF_WIND_UNIT,
     DEFAULTS,
     DOMAIN,
+    ENTRY_TYPE_CONTROLLER,
+    ENTRY_TYPE_ZONE,
     MODE_CALCULATED,
     MODE_SENSOR,
     WIND_UNIT_KMH,
@@ -89,6 +96,9 @@ def _zone_fields(d: dict[str, Any]) -> dict[Any, Any]:
         vol.Required(
             CONF_DAYS_BETWEEN, default=d.get(CONF_DAYS_BETWEEN, DEFAULTS[CONF_DAYS_BETWEEN])
         ): _num("d", minimum=0, maximum=30, step=1),
+        vol.Required(CONF_STAGE, default=d.get(CONF_STAGE, DEFAULTS[CONF_STAGE])): _num(
+            "", minimum=1, maximum=20, step=1
+        ),
     }
 
 
@@ -122,6 +132,26 @@ def _calculated_schema(d: dict[str, Any]) -> vol.Schema:
     return vol.Schema(fields)
 
 
+def _controller_schema(d: dict[str, Any], *, include_name: bool) -> vol.Schema:
+    fields: dict[Any, Any] = {}
+    if include_name:
+        fields[vol.Required(CONF_NAME, default=d.get(CONF_NAME, "Watering schedule"))] = (
+            selector.TextSelector()
+        )
+    fields[
+        vol.Required(
+            CONF_SUNRISE_OFFSET, default=d.get(CONF_SUNRISE_OFFSET, DEFAULTS[CONF_SUNRISE_OFFSET])
+        )
+    ] = _num("min", minimum=0, maximum=240, step=1)
+    fields[_opt(CONF_RAIN_FORECAST_SENSOR, d)] = _sensor()
+    fields[
+        vol.Required(
+            CONF_RAIN_THRESHOLD, default=d.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD])
+        )
+    ] = _num("mm", minimum=0, maximum=100, step=0.1)
+    return vol.Schema(fields)
+
+
 def _validate_calculated(user_input: dict[str, Any]) -> dict[str, str]:
     if not user_input.get(CONF_HUMIDITY_SENSOR) and not user_input.get(CONF_DEWPOINT_SENSOR):
         return {"base": "need_humidity_or_dewpoint"}
@@ -129,7 +159,7 @@ def _validate_calculated(user_input: dict[str, Any]) -> dict[str, str]:
 
 
 class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Set up one irrigation zone per config entry."""
+    """Set up a watering zone or a schedule controller."""
 
     VERSION = 1
 
@@ -139,9 +169,17 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Pick the zone name and the ET0 source mode."""
+        """Choose what to add: a zone or a schedule controller."""
+        return self.async_show_menu(
+            step_id="user", menu_options=["zone", "controller"]
+        )
+
+    async def async_step_zone(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick the zone name and ET0 source mode."""
         if user_input is not None:
-            self._base = user_input
+            self._base = {**user_input, CONF_ENTRY_TYPE: ENTRY_TYPE_ZONE}
             if user_input[CONF_MODE] == MODE_SENSOR:
                 return await self.async_step_sensor()
             return await self.async_step_calculated()
@@ -158,12 +196,11 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="zone", data_schema=schema)
 
     async def async_step_sensor(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Mode 'sensor': an ET0 sensor plus the zone parameters."""
         if user_input is not None:
             return self.async_create_entry(
                 title=self._base[CONF_NAME], data={**self._base, **user_input}
@@ -173,7 +210,6 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_calculated(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Mode 'calculated': weather sensors plus the zone parameters."""
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = _validate_calculated(user_input)
@@ -187,21 +223,34 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_controller(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create a schedule controller that aggregates the zones."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=user_input[CONF_NAME],
+                data={**user_input, CONF_ENTRY_TYPE: ENTRY_TYPE_CONTROLLER},
+            )
+        return self.async_show_form(
+            step_id="controller", data_schema=_controller_schema({}, include_name=True)
+        )
+
     @staticmethod
     def async_get_options_flow(config_entry) -> OptionsFlow:
-        """Return the options flow handler."""
         return EasyIrrigationOptionsFlow()
 
 
 class EasyIrrigationOptionsFlow(OptionsFlow):
-    """Edit the zone parameters after setup (mode is fixed at creation)."""
+    """Edit a zone or controller after setup (type is fixed at creation)."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Route to the editor matching the entry's ET0 mode."""
         current = {**self.config_entry.data, **self.config_entry.options}
-        if current.get(CONF_MODE, MODE_SENSOR) == MODE_CALCULATED:
+        if current.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CONTROLLER:
+            return await self.async_step_controller()
+        if current.get(CONF_MODE) == MODE_CALCULATED:
             return await self.async_step_calculated()
         return await self.async_step_sensor()
 
@@ -226,4 +275,15 @@ class EasyIrrigationOptionsFlow(OptionsFlow):
             current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="calculated", data_schema=_calculated_schema(current), errors=errors
+        )
+
+    async def async_step_controller(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+        current = {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(
+            step_id="controller",
+            data_schema=_controller_schema(current, include_name=False),
         )

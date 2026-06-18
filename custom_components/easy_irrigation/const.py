@@ -5,7 +5,12 @@ from __future__ import annotations
 DOMAIN = "easy_irrigation"
 STORAGE_VERSION = 1
 
-# ET0 source mode
+# Entry type (a config entry is either a watering zone or a schedule controller)
+CONF_ENTRY_TYPE = "entry_type"
+ENTRY_TYPE_ZONE = "zone"
+ENTRY_TYPE_CONTROLLER = "controller"
+
+# ET0 source mode (zone)
 CONF_MODE = "et0_mode"
 MODE_SENSOR = "sensor"
 MODE_CALCULATED = "calculated"
@@ -37,8 +42,14 @@ CONF_MULTIPLIER = "multiplier"
 CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
 CONF_DAYS_BETWEEN = "days_between"
+CONF_STAGE = "stage"
 
-# Defaults (neutral, must be adjusted per zone)
+# Schedule controller parameters
+CONF_SUNRISE_OFFSET = "sunrise_offset_min"
+CONF_RAIN_FORECAST_SENSOR = "rain_forecast_sensor"
+CONF_RAIN_THRESHOLD = "rain_threshold_mm"
+
+# Defaults (neutral, must be adjusted per zone / controller)
 DEFAULTS: dict[str, float] = {
     CONF_AREA: 50.0,
     CONF_FLOW: 5.0,
@@ -48,5 +59,8 @@ DEFAULTS: dict[str, float] = {
     CONF_LEAD_TIME: 0.0,
     CONF_DRAINAGE: 0.0,
     CONF_DAYS_BETWEEN: 0.0,
+    CONF_STAGE: 1.0,
     CONF_WIND_HEIGHT: 10.0,
+    CONF_SUNRISE_OFFSET: 30.0,
+    CONF_RAIN_THRESHOLD: 2.0,
 }

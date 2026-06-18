@@ -117,13 +117,35 @@ dependencies, so it can be tested in isolation:
 pytest tests/
 ```
 
+## Schedule controller
+
+Add a second config entry of type **schedule controller** to turn the per-zone durations into
+a start plan. Each zone has a **stage** number: zones sharing a stage run in parallel, stages
+run one after another. The controller therefore computes:
+
+```
+stage_runtime = max(durations of due zones in that stage)
+total_runtime = sum of stage runtimes
+start_time    = next_sunrise - sunrise_offset - total_runtime
+```
+
+It exposes (plan only - it does not switch valves):
+
+- `sensor.<controller>_total_runtime` (s) - with `stage_durations` / `stage_offsets` attributes
+- `sensor.<controller>_start_time` (timestamp) - when to start so watering finishes on time
+- `binary_sensor.<controller>_skip` - on when the configured rain-forecast sensor is at or above
+  the threshold (independent of the ET0 source)
+
+Your own automation triggers at `start_time` (when not `skip`) and runs each stage's valves.
+
 ## Roadmap
 
 - [x] In-house FAO-56 ET0 from local weather sensors (Mode B), using HA's configured location.
-- [ ] Weather-based irrigation skip (rain forecast), independent of the ET0 source.
-- [ ] Multi-zone scheduler: start so watering finishes at a target time; sequential (sum) or
-      parallel (max) run groups.
-- [ ] Enforce "minimum days between irrigations".
+- [x] Multi-zone scheduler: finish at `sunrise - offset`; stages = parallel groups, total = sum.
+- [x] Weather-based irrigation skip (rain forecast), independent of the ET0 source.
+- [ ] `register_irrigation` service (post-watering bucket refill) + enforce minimum days between
+      irrigations.
+- [ ] Optional built-in valve execution.
 - [ ] Number entities for live per-zone tuning.
 
 ## License
