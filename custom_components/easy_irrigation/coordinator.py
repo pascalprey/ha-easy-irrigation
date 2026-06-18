@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,16 +13,30 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_AREA,
+    CONF_DEWPOINT_SENSOR,
     CONF_DRAINAGE,
     CONF_ET0_SENSOR,
     CONF_FLOW,
+    CONF_HUMIDITY_SENSOR,
     CONF_LEAD_TIME,
     CONF_MAX_BUCKET,
     CONF_MAX_DURATION,
+    CONF_MODE,
     CONF_MULTIPLIER,
+    CONF_RAIN_SENSOR,
+    CONF_SOLAR_SENSOR,
+    CONF_TEMP_MAX_SENSOR,
+    CONF_TEMP_MIN_SENSOR,
+    CONF_WIND_HEIGHT,
+    CONF_WIND_SENSOR,
+    CONF_WIND_UNIT,
     DOMAIN,
+    MODE_CALCULATED,
+    MODE_SENSOR,
     STORAGE_VERSION,
+    WIND_UNIT_KMH,
 )
+from .et0 import avp_from_dewpoint, avp_from_rh, et0_fao56, wind_speed_2m
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,9 +46,9 @@ _UNAVAILABLE = ("unknown", "unavailable", "none", "", None)
 class EasyIrrigationCoordinator:
     """Holds the per-zone water balance and derives the irrigation duration.
 
-    The bucket is depleted by the configured net ET0 (ET0 minus rainfall, in mm)
-    exactly once per calendar day, so ``async_calculate`` can be called as often
-    as desired during the day without double-counting evapotranspiration.
+    The bucket is depleted by the net ET0 (ET0 minus rainfall, in mm) exactly
+    once per calendar day, so ``async_calculate`` can be called as often as
+    desired during the day without double-counting evapotranspiration.
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -83,8 +98,7 @@ class EasyIrrigationCoordinator:
         for cb in list(self._listeners):
             cb()
 
-    def _read_et0(self) -> float | None:
-        entity_id = self.config.get(CONF_ET0_SENSOR)
+    def _read_float(self, entity_id: str | None) -> float | None:
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)
@@ -93,8 +107,59 @@ class EasyIrrigationCoordinator:
         try:
             return float(state.state)
         except (ValueError, TypeError):
-            _LOGGER.warning("ET0 sensor %s is not numeric: %s", entity_id, state.state)
+            _LOGGER.warning("Sensor %s is not numeric: %s", entity_id, state.state)
             return None
+
+    def _read_et0(self) -> float | None:
+        """Return the daily net ET (mm) for this zone, by configured mode."""
+        cfg = self.config
+        if cfg.get(CONF_MODE, MODE_SENSOR) == MODE_CALCULATED:
+            return self._compute_et0_from_weather(cfg)
+        return self._read_float(cfg.get(CONF_ET0_SENSOR))
+
+    def _compute_et0_from_weather(self, cfg: dict) -> float | None:
+        """Compute net ET via FAO-56 from local daily weather sensors."""
+        tmin = self._read_float(cfg.get(CONF_TEMP_MIN_SENSOR))
+        tmax = self._read_float(cfg.get(CONF_TEMP_MAX_SENSOR))
+        wind = self._read_float(cfg.get(CONF_WIND_SENSOR))
+        if tmin is None or tmax is None or wind is None:
+            _LOGGER.warning(
+                "Easy Irrigation: missing temperature/wind input for zone %s",
+                self.entry.title,
+            )
+            return None
+
+        tdew = self._read_float(cfg.get(CONF_DEWPOINT_SENSOR))
+        if tdew is not None:
+            ea = avp_from_dewpoint(tdew)
+        else:
+            rh = self._read_float(cfg.get(CONF_HUMIDITY_SENSOR))
+            if rh is None:
+                _LOGGER.warning(
+                    "Easy Irrigation: no humidity/dew-point input for zone %s",
+                    self.entry.title,
+                )
+                return None
+            ea = avp_from_rh(tmin, tmax, rh_mean=rh)
+
+        if cfg.get(CONF_WIND_UNIT) == WIND_UNIT_KMH:
+            wind = wind / 3.6
+        u2 = wind_speed_2m(wind, float(cfg.get(CONF_WIND_HEIGHT, 10.0)))
+
+        rs = self._read_float(cfg.get(CONF_SOLAR_SENSOR))  # optional, MJ/m²/day
+        gross = et0_fao56(
+            tmin=tmin,
+            tmax=tmax,
+            u2=u2,
+            ea=ea if ea is not None else 0.0,
+            elevation_m=float(self.hass.config.elevation or 0.0),
+            lat_rad=math.radians(self.hass.config.latitude),
+            doy=dt_util.now().timetuple().tm_yday,
+            rs=rs,
+        )
+
+        rain = self._read_float(cfg.get(CONF_RAIN_SENSOR))
+        return gross - rain if rain is not None else gross
 
     def _recompute_duration(self) -> None:
         cfg = self.config
@@ -117,7 +182,7 @@ class EasyIrrigationCoordinator:
         today = dt_util.now().date().isoformat()
 
         if et0 is not None and self.last_et0_date != today:
-            self.bucket -= et0  # net ET0 already includes rainfall
+            self.bucket -= et0  # net ET (rainfall already accounted for)
             max_bucket = float(cfg[CONF_MAX_BUCKET])
             drainage = float(cfg.get(CONF_DRAINAGE, 0.0))
             if self.bucket > 0 and drainage > 0 and max_bucket > 0:
@@ -126,8 +191,6 @@ class EasyIrrigationCoordinator:
                 )
             self.bucket = min(self.bucket, max_bucket)
             self.last_et0_date = today
-        elif et0 is None:
-            _LOGGER.debug("No usable ET0 value for zone %s; duration only", self.entry.title)
 
         self._recompute_duration()
         await self._async_save()

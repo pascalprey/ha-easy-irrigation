@@ -3,10 +3,40 @@
     "step": {
       "user": {
         "title": "Add irrigation zone",
-        "description": "Configure one irrigation zone. Add the integration again for each additional zone.",
+        "description": "Name the zone and choose how its evapotranspiration is obtained.",
         "data": {
           "name": "Zone name",
+          "et0_mode": "ET0 source"
+        }
+      },
+      "sensor": {
+        "title": "ET0 from a sensor",
+        "description": "Provide a sensor with the daily net ET (ET0 minus rainfall) in mm, and the zone parameters.",
+        "data": {
           "et0_sensor": "ET0 sensor (daily net ET in mm)",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "days_between": "Minimum days between irrigations"
+        }
+      },
+      "calculated": {
+        "title": "ET0 from weather sensors (FAO-56)",
+        "description": "Provide daily-aggregated weather sensors. Solar radiation and rainfall are optional (solar is otherwise estimated from the temperature range; without rainfall the result is gross ET0). Location and elevation are taken from Home Assistant.",
+        "data": {
+          "temp_min_sensor": "Daily minimum temperature (°C)",
+          "temp_max_sensor": "Daily maximum temperature (°C)",
+          "humidity_sensor": "Mean relative humidity (%) — optional if dew point is set",
+          "dewpoint_sensor": "Dew point (°C) — optional, preferred over humidity",
+          "wind_sensor": "Mean wind speed",
+          "wind_unit": "Wind speed unit",
+          "wind_height_m": "Wind measurement height (m)",
+          "solar_sensor": "Solar radiation (MJ/m²/day) — optional",
+          "rain_sensor": "Daily rainfall (mm) — optional",
           "area_m2": "Area (m²)",
           "flow_lpm": "Flow rate (L/min)",
           "max_bucket_mm": "Maximum bucket (mm)",
@@ -17,12 +47,15 @@
           "days_between": "Minimum days between irrigations"
         }
       }
+    },
+    "error": {
+      "need_humidity_or_dewpoint": "Provide either a humidity sensor or a dew-point sensor."
     }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Edit irrigation zone",
+      "sensor": {
+        "title": "Edit zone (ET0 from sensor)",
         "data": {
           "et0_sensor": "ET0 sensor (daily net ET in mm)",
           "area_m2": "Area (m²)",
@@ -34,6 +67,45 @@
           "drainage_rate": "Drainage rate (mm/h at saturation)",
           "days_between": "Minimum days between irrigations"
         }
+      },
+      "calculated": {
+        "title": "Edit zone (ET0 from weather sensors)",
+        "data": {
+          "temp_min_sensor": "Daily minimum temperature (°C)",
+          "temp_max_sensor": "Daily maximum temperature (°C)",
+          "humidity_sensor": "Mean relative humidity (%) — optional if dew point is set",
+          "dewpoint_sensor": "Dew point (°C) — optional, preferred over humidity",
+          "wind_sensor": "Mean wind speed",
+          "wind_unit": "Wind speed unit",
+          "wind_height_m": "Wind measurement height (m)",
+          "solar_sensor": "Solar radiation (MJ/m²/day) — optional",
+          "rain_sensor": "Daily rainfall (mm) — optional",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "days_between": "Minimum days between irrigations"
+        }
+      }
+    },
+    "error": {
+      "need_humidity_or_dewpoint": "Provide either a humidity sensor or a dew-point sensor."
+    }
+  },
+  "selector": {
+    "et0_mode": {
+      "options": {
+        "sensor": "From an ET0 sensor",
+        "calculated": "Computed from weather sensors (FAO-56)"
+      }
+    },
+    "wind_unit": {
+      "options": {
+        "ms": "m/s",
+        "kmh": "km/h"
       }
     }
   },
