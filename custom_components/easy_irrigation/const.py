@@ -5,6 +5,10 @@ from __future__ import annotations
 DOMAIN = "easy_irrigation"
 STORAGE_VERSION = 1
 
+# Dispatcher signal fired whenever a schedule controller recomputes its plan.
+# Zone "next watering" sensors listen for it to refresh from their controller.
+SIGNAL_SCHEDULE_UPDATED = f"{DOMAIN}_schedule_updated"
+
 # Entry type (a config entry is either a watering zone or a schedule controller)
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ZONE = "zone"

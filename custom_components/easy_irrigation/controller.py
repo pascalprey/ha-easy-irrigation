@@ -24,6 +24,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_track_point_in_time,
     async_track_time_change,
@@ -41,6 +42,7 @@ from .const import (
     DEFAULT_CALC_TIME,
     DEFAULT_RUN_VALVES,
     DEFAULTS,
+    SIGNAL_SCHEDULE_UPDATED,
     phases_from_config,
     to_float,
 )
@@ -157,6 +159,9 @@ class ScheduleController:
     def _notify(self) -> None:
         for cb in list(self._listeners):
             cb()
+        # Wake zone-owned "next watering" sensors, which live on a different
+        # config entry and read this controller's plan via the dispatcher.
+        async_dispatcher_send(self.hass, SIGNAL_SCHEDULE_UPDATED)
 
     def _phases(self) -> dict[int, list[str]]:
         """Configured phases -> {position (1-based): [zone duration-sensor ids]}."""

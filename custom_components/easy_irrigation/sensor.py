@@ -15,13 +15,20 @@ from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import (
     AddEntitiesCallback,
     async_get_current_platform,
 )
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_ENTRY_TYPE, DOMAIN, ENTRY_TYPE_CONTROLLER, phases_from_config
+from .const import (
+    CONF_ENTRY_TYPE,
+    DOMAIN,
+    ENTRY_TYPE_CONTROLLER,
+    SIGNAL_SCHEDULE_UPDATED,
+    phases_from_config,
+)
 from .controller import ScheduleController
 from .coordinator import EasyIrrigationCoordinator
 
@@ -40,6 +47,21 @@ def _zone_name(hass: HomeAssistant, sensor_id: str) -> str:
     return sensor_id
 
 
+def _remove_legacy_zone_next_sensors(
+    hass: HomeAssistant, controller_entry: ConfigEntry
+) -> None:
+    """Drop the old controller-owned "next watering" sensors.
+
+    Up to v0.6 these were created by the controller config entry, which made
+    the controller span every zone device. They are now owned by each zone
+    entry instead, so the stale controller-owned registry rows are removed.
+    """
+    registry = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(registry, controller_entry.entry_id):
+        if entity.unique_id.endswith("_next_watering"):
+            registry.async_remove(entity.entity_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -47,6 +69,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensors for a zone or a schedule controller."""
     if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CONTROLLER:
+        _remove_legacy_zone_next_sensors(hass, entry)
         controller: ScheduleController = entry.runtime_data
         entities: list[SensorEntity] = [
             TotalRuntimeSensor(controller, entry),
@@ -57,29 +80,17 @@ async def async_setup_entry(
             names = [_zone_name(hass, s) for s in zone_sensors]
             label = f"Phase {index} ({', '.join(names)})" if names else f"Phase {index}"
             entities.append(PhaseDurationSensor(controller, entry, index, label))
-
-        # One "next watering" sensor per zone, attached to that zone's device so
-        # it shows up alongside the zone's bucket/duration.
-        registry = er.async_get(hass)
-        seen_zones: set[str] = set()
-        for zone_sensors in phases:
-            for sensor_id in zone_sensors:
-                ent = registry.async_get(sensor_id)
-                if ent is None or ent.config_entry_id is None:
-                    continue
-                if ent.config_entry_id in seen_zones:
-                    continue
-                zone_entry = hass.config_entries.async_get_entry(ent.config_entry_id)
-                if zone_entry is None:
-                    continue
-                seen_zones.add(ent.config_entry_id)
-                entities.append(ZoneNextWateringSensor(controller, entry, zone_entry))
-
         async_add_entities(entities)
         return
 
     coordinator: EasyIrrigationCoordinator = entry.runtime_data
-    async_add_entities([BucketSensor(coordinator, entry), DurationSensor(coordinator, entry)])
+    async_add_entities(
+        [
+            BucketSensor(coordinator, entry),
+            DurationSensor(coordinator, entry),
+            ZoneNextWateringSensor(entry),
+        ]
+    )
 
     platform = async_get_current_platform()
     platform.async_register_entity_service("calculate", None, "async_service_calculate")
@@ -249,7 +260,11 @@ class PhaseDurationSensor(_ControllerSensorBase):
 
 
 class ZoneNextWateringSensor(SensorEntity):
-    """When a zone is next due to be watered (lives on the zone's device).
+    """When this zone is next due to be watered (lives on the zone's device).
+
+    Owned by the zone config entry, so the zone device is not pulled into the
+    schedule controller's entry. It reads its slot from whichever controller
+    schedules this zone and refreshes on that controller's dispatcher signal.
 
     The value is the zone's valve-open time (controller start time + phase
     offset). It is ``unknown`` when the zone is not due, when rain skips the run,
@@ -261,39 +276,48 @@ class ZoneNextWateringSensor(SensorEntity):
     _attr_translation_key = "next_watering"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:calendar-clock"
+    _attr_should_poll = False
 
-    def __init__(
-        self,
-        controller: ScheduleController,
-        controller_entry: ConfigEntry,
-        zone_entry: ConfigEntry,
-    ) -> None:
-        self._controller = controller
+    def __init__(self, zone_entry: ConfigEntry) -> None:
         self._zone_entry_id = zone_entry.entry_id
-        self._attr_unique_id = (
-            f"{controller_entry.entry_id}_{zone_entry.entry_id}_next_watering"
+        self._attr_unique_id = f"{zone_entry.entry_id}_next_watering"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, zone_entry.entry_id)},
+            name=zone_entry.title,
+            manufacturer="Easy Irrigation",
+            model="Irrigation zone",
         )
-        # identifiers only -> attach to the existing zone device, don't recreate it
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, zone_entry.entry_id)})
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(self._controller.add_listener(self.async_write_ha_state))
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, SIGNAL_SCHEDULE_UPDATED, self.async_write_ha_state
+            )
+        )
 
-    @property
-    def _info(self) -> dict:
-        return self._controller.zone_next.get(self._zone_entry_id) or {}
+    def _resolve(self) -> tuple[ScheduleController | None, dict]:
+        """Find the controller scheduling this zone and the zone's plan slot."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get(CONF_ENTRY_TYPE) != ENTRY_TYPE_CONTROLLER:
+                continue
+            controller = getattr(entry, "runtime_data", None)
+            zone_next = getattr(controller, "zone_next", None)
+            if zone_next and self._zone_entry_id in zone_next:
+                return controller, zone_next[self._zone_entry_id]
+        return None, {}
 
     @property
     def native_value(self) -> datetime | None:
-        epoch = self._info.get("epoch")
+        _, info = self._resolve()
+        epoch = info.get("epoch")
         return dt_util.utc_from_timestamp(epoch) if epoch else None
 
     @property
     def extra_state_attributes(self) -> dict:
-        info = self._info
+        controller, info = self._resolve()
         return {
             "status": info.get("status", "unknown"),
-            "skip": self._controller.skip,
+            "skip": bool(getattr(controller, "skip", False)),
             "phase": info.get("phase"),
             "offset_seconds": info.get("offset"),
             "duration_seconds": info.get("duration"),
