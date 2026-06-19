@@ -392,17 +392,17 @@ class ScheduleController:
     def _start_fire(self, _now) -> None:
         self._start_unsub = None
         self._pending_start = None
-        if self._running:
-            return
-        self._run_task = self.hass.async_create_task(self._async_run())
-
-    async def _async_run(self) -> None:
-        """Execute the current plan once, closing valves whatever happens."""
         if self._running or self.skip or self.total <= 0:
             return
+        self._run_task = self.hass.async_create_task(self._async_run_guarded())
+
+    async def _async_run_guarded(
+        self, *, test_seconds: int | None = None, register: bool = True
+    ) -> None:
+        """Execute the current plan once, closing valves whatever happens."""
         self._running = True
         try:
-            await self._async_execute_plan()
+            await self._async_execute_plan(test_seconds=test_seconds, register=register)
         except asyncio.CancelledError:
             _LOGGER.warning("Easy Irrigation: watering run cancelled; valves closed")
             raise
@@ -412,7 +412,35 @@ class ScheduleController:
             self._running = False
             self._run_task = None
 
-    async def _async_execute_plan(self) -> None:
+    async def async_run_now(
+        self, *, ignore_skip: bool = True, test_seconds: int | None = None
+    ) -> None:
+        """Run the current plan now (manual / test trigger), in the background.
+
+        Switches the valves regardless of ``run_valves``. With ``ignore_skip`` it
+        also runs through an active rain skip; ``test_seconds`` overrides each due
+        zone's duration for a short hardware/orchestration test and skips
+        registering the watering (so the deficit is left untouched). Returns at
+        once - the run continues as a tracked background task.
+        """
+        if self._running:
+            _LOGGER.warning("Easy Irrigation: a watering run is already in progress")
+            return
+        if not ignore_skip and self.skip:
+            _LOGGER.info("Easy Irrigation: manual run skipped (rain forecast)")
+            return
+        # Claim the run synchronously so two near-simultaneous triggers (e.g. the
+        # service aimed at the whole controller device) cannot both start a run.
+        self._running = True
+        self._run_task = self.hass.async_create_task(
+            self._async_run_guarded(
+                test_seconds=test_seconds, register=test_seconds is None
+            )
+        )
+
+    async def _async_execute_plan(
+        self, *, test_seconds: int | None = None, register: bool = True
+    ) -> None:
         """Run phases one after another; zones within a phase in parallel."""
         # Freeze the plan at start: the 60 s recompute keeps reassigning self.plan
         # (zones drop out as they register), but a run executes what was due at the
@@ -420,17 +448,19 @@ class ScheduleController:
         plan = list(self.plan)
         for phase in plan:
             runs = [
-                self._async_run_zone(zone)
+                self._async_run_zone(zone, test_seconds=test_seconds, register=register)
                 for zone in phase.get("zones", [])
                 if zone.get("valve") and int(zone.get("duration", 0)) > 0
             ]
             if runs:
                 await asyncio.gather(*runs)
 
-    async def _async_run_zone(self, zone: dict) -> None:
+    async def _async_run_zone(
+        self, zone: dict, *, test_seconds: int | None = None, register: bool = True
+    ) -> None:
         """Open a zone's valve for its duration, then register the watering."""
         valve = zone["valve"]
-        duration = int(zone["duration"])
+        duration = int(test_seconds) if test_seconds is not None else int(zone["duration"])
         await self._async_set_valve(valve, True)
         try:
             await asyncio.sleep(duration)
@@ -439,6 +469,7 @@ class ScheduleController:
             self.hass.async_create_task(self._async_set_valve(valve, False))
             raise
         await self._async_set_valve(valve, False)
-        coordinator = self._coordinator_for(zone.get("duration_sensor"))
-        if coordinator is not None:
-            await coordinator.async_register_irrigation()
+        if register:
+            coordinator = self._coordinator_for(zone.get("duration_sensor"))
+            if coordinator is not None:
+                await coordinator.async_register_irrigation()

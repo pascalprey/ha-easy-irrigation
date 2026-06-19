@@ -38,6 +38,7 @@ from .const import (
     WIND_UNIT_KMH,
     to_float,
 )
+from .bucket_math import apply_net_et0
 from .et0 import avp_from_dewpoint, avp_from_rh, et0_fao56, wind_speed_2m
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +62,9 @@ class EasyIrrigationCoordinator:
         self.bucket: float = 0.0
         self.duration: int = 0
         self.last_et0_date: str | None = None
+        # How much net ET0 has already been booked for ``last_et0_date`` (lets a
+        # re-calculation refresh to the latest value without double-counting).
+        self.et0_applied: float | None = None
         self.last_irrigation_date: str | None = None
         self._listeners: list[Callable[[], None]] = []
 
@@ -74,6 +78,7 @@ class EasyIrrigationCoordinator:
         data = await self._store.async_load() or {}
         self.bucket = float(data.get("bucket", 0.0))
         self.last_et0_date = data.get("last_et0_date")
+        self.et0_applied = data.get("et0_applied")
         self.last_irrigation_date = data.get("last_irrigation_date")
         self._recompute_duration()
 
@@ -82,6 +87,7 @@ class EasyIrrigationCoordinator:
             {
                 "bucket": self.bucket,
                 "last_et0_date": self.last_et0_date,
+                "et0_applied": self.et0_applied,
                 "last_irrigation_date": self.last_irrigation_date,
             }
         )
@@ -187,22 +193,26 @@ class EasyIrrigationCoordinator:
             self.duration = 0
 
     async def async_calculate(self) -> None:
-        """Apply the daily ET0 depletion (once per day) and recompute duration."""
+        """Apply today's net-ET0 depletion (refresh model) and recompute duration.
+
+        The day's net ET0 is booked once and refreshed to the latest value on
+        every later call of the same day (only the change is applied), so
+        calculating repeatedly never double-counts yet always uses the newest
+        value - both for the automatic daily run and the manual ``calculate``
+        service. See :func:`bucket_math.apply_net_et0`.
+        """
         cfg = self.config
-        et0 = self._read_et0()
+        net = self._read_et0()
         today = dt_util.now().date().isoformat()
-
-        if et0 is not None and self.last_et0_date != today:
-            self.bucket -= et0  # net ET (rainfall already accounted for)
-            max_bucket = float(cfg[CONF_MAX_BUCKET])
-            drainage = float(cfg.get(CONF_DRAINAGE, 0.0))
-            if self.bucket > 0 and drainage > 0 and max_bucket > 0:
-                self.bucket -= (
-                    drainage * 24 * (min(self.bucket, max_bucket) / max_bucket) ** 4
-                )
-            self.bucket = min(self.bucket, max_bucket)
-            self.last_et0_date = today
-
+        self.bucket, self.last_et0_date, self.et0_applied = apply_net_et0(
+            bucket=self.bucket,
+            et0_date=self.last_et0_date,
+            et0_applied=self.et0_applied,
+            today=today,
+            net=net,
+            max_bucket=float(cfg[CONF_MAX_BUCKET]),
+            drainage=float(cfg.get(CONF_DRAINAGE, 0.0)),
+        )
         self._recompute_duration()
         await self._async_save()
         self._notify()

@@ -175,7 +175,7 @@
   "services": {
     "calculate": {
       "name": "Berechnen",
-      "description": "Die Zielzone(n) neu berechnen: die tägliche Netto-ET0-Abnahme (einmal pro Kalendertag) anwenden und die Bewässerungsdauer aktualisieren."
+      "description": "Die Zielzone(n) neu berechnen: die heutige Netto-ET0-Abnahme anwenden (bei jedem Aufruf auf den neuesten Wert aktualisiert, nie doppelt gezählt) und die Bewässerungsdauer aktualisieren."
     },
     "set_bucket": {
       "name": "Speicher setzen",
@@ -193,6 +193,14 @@
       "description": "Festhalten, dass die Zielzone(n) gerade bewässert wurden: Speicher auffüllen und das heutige Datum stempeln (wird vom Mindestintervall der Zone genutzt).",
       "fields": {
         "amount_mm": { "name": "Menge (mm)", "description": "Ausgebrachtes Wasser in mm; ohne Angabe wird der Speicher auf 0 gesetzt." }
+      }
+    },
+    "run_schedule": {
+      "name": "Plan ausführen",
+      "description": "Den aktuellen Bewässerungsplan des Controllers sofort ausführen (manuell / Test): Ventile der fälligen Zonen öffnen, Phasen nacheinander, Zonen je Phase parallel.",
+      "fields": {
+        "ignore_skip": { "name": "Regen-Skip ignorieren", "description": "Auch ausführen, wenn der Regen-Skip gerade aktiv ist." },
+        "test_seconds": { "name": "Testdauer (s)", "description": "Jede fällige Zone für so viele Sekunden laufen lassen statt der berechneten Dauer und die Bewässerung nicht registrieren." }
       }
     }
   }

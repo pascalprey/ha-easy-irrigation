@@ -7,7 +7,7 @@ net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, compu
 that zone needs to be watered. The actual valve switching stays in **your** automations - this
 integration is the "brain" (buckets + durations + a start plan), not the "hands".
 
-> **Status:** v0.6. One zone = one config entry; a schedule controller is a separate entry.
+> **Status:** v0.8. One zone = one config entry; a schedule controller is a separate entry.
 > The UI is available in English and German (chosen by your Home Assistant language).
 > The controller can run the whole day on its own (daily calculation + optional valve
 > switching), so a fully automation-free setup is possible.
@@ -50,10 +50,16 @@ services `easy_irrigation.calculate`, `set_bucket`, `reset_bucket` and `register
 
 ### Maths
 
-Once per calendar day, per zone: `bucket = min(bucket - net_ET0, max_bucket)`. On every
-`calculate` the duration is recomputed: when `bucket < 0` **and** the zone's minimum interval
-has elapsed, `duration = |bucket| / (flow_lpm*60/area_m2) * 3600 * multiplier + lead_time`
-(capped at `max_duration`), else `0`. ET0 is applied **only once per calendar day**.
+Per zone, per day: `bucket = min(bucket - net_ET0, max_bucket)`. On every `calculate` the
+duration is recomputed: when `bucket < 0` **and** the zone's minimum interval has elapsed,
+`duration = |bucket| / (flow_lpm*60/area_m2) * 3600 * multiplier + lead_time` (capped at
+`max_duration`), else `0`.
+
+The day's net ET0 is applied **once and then refreshed** to the latest value on every later
+`calculate` of the same day - only the change since the previous call is booked. So calling
+`calculate` repeatedly never double-counts, yet the bucket always reflects the newest value
+(e.g. an early run that used a still-firming forecast is corrected by the evening run). Pick a
+late `calc_time` so the figure is the day's actual value rather than a morning forecast.
 
 > All sensor values are parsed comma-tolerantly (`"3,86"` works as well as `"3.86"`), so a
 > localised sensor never breaks the calculation.
@@ -105,6 +111,11 @@ The controller has two settings that let it run without any automation:
   integration needs **no automation at all**. In this mode the controller also closes all its
   valves on load, so a restart that interrupted a run cannot leave a valve open.
 
+To run the plan on demand - to test the wiring without waiting for the scheduled time - call the
+`easy_irrigation.run_schedule` service on a controller entity. `ignore_skip` (default on) runs
+through an active rain skip, and `test_seconds` runs each due zone for a few seconds without
+registering the watering (a pure hardware/orchestration check that leaves the buckets untouched).
+
 If you prefer to keep control in your own automation, leave `run_valves` off: trigger at
 `start_time` (when `skip` is off), read the `plan` attribute and open each phase's valves for their
 durations, then call `register_irrigation` per zone.
@@ -125,6 +136,8 @@ Assistant dependencies and are unit-tested: `pytest tests/`.
 - [x] English + German translations.
 - [x] Built-in daily calculation at a configurable time (no automation needed).
 - [x] Optional built-in valve execution (fully automation-free watering).
+- [x] Refresh model: a later `calculate` uses the newest net-ET0 without double-counting.
+- [x] `run_schedule` service to run/test the plan on demand.
 - [ ] Number entities for live per-zone tuning.
 
 ## License

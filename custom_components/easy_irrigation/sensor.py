@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import (
@@ -81,6 +81,18 @@ async def async_setup_entry(
             label = f"Phase {index} ({', '.join(names)})" if names else f"Phase {index}"
             entities.append(PhaseDurationSensor(controller, entry, index, label))
         async_add_entities(entities)
+
+        # Controller-scoped service: run the current plan now (manual / test).
+        async_get_current_platform().async_register_entity_service(
+            "run_schedule",
+            {
+                vol.Optional("ignore_skip", default=True): cv.boolean,
+                vol.Optional("test_seconds"): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=3600)
+                ),
+            },
+            "async_service_run_schedule",
+        )
         return
 
     coordinator: EasyIrrigationCoordinator = entry.runtime_data
@@ -192,6 +204,13 @@ class _ControllerSensorBase(SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self._controller.add_listener(self.async_write_ha_state))
+
+    async def async_service_run_schedule(
+        self, ignore_skip: bool = True, test_seconds: int | None = None
+    ) -> None:
+        await self._controller.async_run_now(
+            ignore_skip=ignore_skip, test_seconds=test_seconds
+        )
 
 
 class TotalRuntimeSensor(_ControllerSensorBase):

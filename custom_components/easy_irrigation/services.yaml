@@ -1,8 +1,9 @@
 calculate:
   name: Calculate
   description: >-
-    Recompute the targeted zone(s): apply the daily net-ET0 depletion (once per
-    calendar day) and update the irrigation duration.
+    Recompute the targeted zone(s): apply today's net-ET0 depletion (refreshed to
+    the latest value on each call, never double-counted) and update the irrigation
+    duration.
   target:
     entity:
       integration: easy_irrigation
@@ -60,3 +61,35 @@ register_irrigation:
           max: 200
           step: 0.1
           unit_of_measurement: mm
+
+run_schedule:
+  name: Run schedule
+  description: >-
+    Immediately run the schedule controller's current plan (manual / test):
+    opens each due zone's valve, phases in sequence and zones within a phase in
+    parallel. Target a controller entity (e.g. its total-runtime sensor).
+  target:
+    entity:
+      integration: easy_irrigation
+      domain: sensor
+  fields:
+    ignore_skip:
+      name: Ignore rain skip
+      description: Run even if the rain-forecast skip is currently active.
+      default: true
+      selector:
+        boolean:
+    test_seconds:
+      name: Test duration (s)
+      description: >-
+        If set, run each due zone for this many seconds instead of its computed
+        duration and do not register the watering - a short hardware /
+        orchestration test that leaves the buckets untouched.
+      required: false
+      example: 5
+      selector:
+        number:
+          min: 1
+          max: 3600
+          step: 1
+          unit_of_measurement: s
