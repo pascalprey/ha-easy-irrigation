@@ -9,11 +9,10 @@ STORAGE_VERSION = 1
 # Zone "next watering" sensors listen for it to refresh from their controller.
 SIGNAL_SCHEDULE_UPDATED = f"{DOMAIN}_schedule_updated"
 
-# Entry type (zone, schedule controller, or a shared Open-Meteo data source)
+# Entry type (a config entry is either a watering zone or a schedule controller)
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ZONE = "zone"
 ENTRY_TYPE_CONTROLLER = "controller"
-ENTRY_TYPE_OPENMETEO = "openmeteo"
 
 # ET0 source mode (zone)
 CONF_MODE = "et0_mode"
@@ -50,11 +49,8 @@ CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
 CONF_MIN_DAYS_BETWEEN = "min_days_between"
 
-# Built-in Open-Meteo data source (its own config entry; shared by zones + skip)
-CONF_LATITUDE = "latitude"
-CONF_LONGITUDE = "longitude"
-CONF_SCAN_INTERVAL = "scan_interval"  # seconds between Open-Meteo fetches
-DEFAULT_SCAN_INTERVAL = 1800
+# Built-in Open-Meteo source: a per-zone ET0 mode (and optional rain skip) that
+# fetches from Open-Meteo using the Home Assistant location. No separate entry.
 OPENMETEO_ATTRIBUTION = "Weather data by Open-Meteo.com (CC BY 4.0)"
 
 # Schedule controller parameters

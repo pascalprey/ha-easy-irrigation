@@ -49,7 +49,7 @@ from .const import (
     phases_from_config,
     to_float,
 )
-from .openmeteo import async_get_openmeteo
+from .openmeteo import async_fetch_openmeteo
 from .schedule_math import compute_schedule
 
 _LOGGER = logging.getLogger(__name__)
@@ -262,14 +262,10 @@ class ScheduleController:
     async def _async_forecast_rain(self, cfg: dict) -> float | None:
         """Forecast daily rainfall (mm) from the configured rain source."""
         if cfg.get(CONF_RAIN_SOURCE, DEFAULT_RAIN_SOURCE) == RAIN_SOURCE_OPENMETEO:
-            coordinator = async_get_openmeteo(self.hass)
-            if coordinator is None:
-                _LOGGER.warning(
-                    "Easy Irrigation: rain source is Open-Meteo, but no Open-Meteo "
-                    "source is configured"
-                )
-                return None
-            return coordinator.rain
+            data = await async_fetch_openmeteo(
+                self.hass, self.hass.config.latitude, self.hass.config.longitude
+            )
+            return (data or {}).get("rain")
         weather = cfg.get(CONF_WEATHER_ENTITY)
         if not weather:
             return None

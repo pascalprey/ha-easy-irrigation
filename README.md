@@ -24,17 +24,17 @@ ET0 (or let it compute ET0 from weather sensors), configure your zones, done.
 1. HACS -> Integrations -> menu -> **Custom repositories** -> add this repository (category:
    *Integration*).
 2. Install **Easy Irrigation**, then restart Home Assistant.
-3. **Settings -> Devices & Services -> Add Integration -> Easy Irrigation**, then pick *zone*,
-   *schedule controller*, or *Open-Meteo data source*.
+3. **Settings -> Devices & Services -> Add Integration -> Easy Irrigation**, then pick *zone*
+   or *schedule controller*.
 
 ## Zones
 
 Add a zone and pick its **ET0 source** - how the daily net evapotranspiration (ET0 minus
 rainfall, in mm) is obtained:
 
-1. **Open-Meteo (built-in)** - *recommended.* No sensor, no YAML: add an **Open-Meteo data
-   source** once (coordinates default to your Home Assistant location) and zones read the net
-   ET0 from it. See [Open-Meteo data source](#open-meteo-data-source).
+1. **Open-Meteo (built-in)** - *recommended.* No sensor, no YAML, no separate entry: pick
+   Open-Meteo in the zone and it fetches the daily net ET0 itself, using your Home Assistant
+   location. See [Open-Meteo (built-in)](#open-meteo-built-in).
 2. **From an ET0 sensor** - point at any sensor that already gives the daily net ET in mm.
 3. **FAO-56 from weather sensors** - compute ET0 locally from your own daily-aggregated weather
    sensors. See [FAO-56 from your own sensors](#fao-56-from-your-own-sensors).
@@ -72,13 +72,15 @@ late `calc_time` so the figure is the day's actual value rather than a morning f
 > All sensor values are parsed comma-tolerantly (`"3,86"` works as well as `"3.86"`), so a
 > localised sensor never breaks the calculation.
 
-### Open-Meteo data source
+### Open-Meteo (built-in)
 
-Add Integration -> Easy Irrigation -> **Open-Meteo data source**. Latitude/longitude default to
-your Home Assistant location (override if you like); the integration fetches the daily reference
-ET0 and rainfall itself and exposes one diagnostic **Net ET0** sensor (gross ET0 and rainfall as
-attributes). Every zone set to the Open-Meteo source - and, optionally, the controller's rain
-skip - reads from this single shared fetch, so there is no REST sensor and no template to set up.
+Pick **Open-Meteo (built-in)** as a zone's ET0 source - no separate entry, no REST sensor, no
+template. At calculation time the zone fetches the daily reference ET0 and rainfall from
+Open-Meteo using your Home Assistant location, and uses the net (ET0 minus rainfall). The fetched
+figures appear as attributes on the zone's bucket sensor (`net_et0_mm`, `gross_et0_mm`,
+`rainfall_mm`, `et0_date`). One request per location is shared (cached ~30 min) across all
+Open-Meteo zones and the controller's rain skip, so the controller's rain source can also be set
+to Open-Meteo - a single source for both ET0 and the skip.
 
 > **Attribution & licence.** Weather data by [Open-Meteo.com](https://open-meteo.com) under
 > CC BY 4.0. Open-Meteo's free API needs no key and is for **non-commercial** use; stay within

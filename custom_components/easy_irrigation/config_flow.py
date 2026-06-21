@@ -18,9 +18,7 @@ from .const import (
     CONF_ET0_SENSOR,
     CONF_FLOW,
     CONF_HUMIDITY_SENSOR,
-    CONF_LATITUDE,
     CONF_LEAD_TIME,
-    CONF_LONGITUDE,
     CONF_MAX_BUCKET,
     CONF_MAX_DURATION,
     CONF_MIN_DAYS_BETWEEN,
@@ -33,7 +31,6 @@ from .const import (
     CONF_RAIN_SOURCE,
     CONF_RAIN_THRESHOLD,
     CONF_RUN_VALVES,
-    CONF_SCAN_INTERVAL,
     CONF_SOLAR_SENSOR,
     CONF_SUNRISE_OFFSET,
     CONF_TEMP_MAX_SENSOR,
@@ -46,11 +43,9 @@ from .const import (
     DEFAULT_CALC_TIME,
     DEFAULT_RAIN_SOURCE,
     DEFAULT_RUN_VALVES,
-    DEFAULT_SCAN_INTERVAL,
     DEFAULTS,
     DOMAIN,
     ENTRY_TYPE_CONTROLLER,
-    ENTRY_TYPE_OPENMETEO,
     ENTRY_TYPE_ZONE,
     MODE_CALCULATED,
     MODE_OPENMETEO,
@@ -191,27 +186,6 @@ def _controller_schema(d: dict[str, Any], *, include_name: bool) -> vol.Schema:
     return vol.Schema(fields)
 
 
-def _openmeteo_schema(hass, d: dict[str, Any], *, include_name: bool) -> vol.Schema:
-    """Open-Meteo data-source fields; coordinates default to the HA location."""
-    fields: dict[Any, Any] = {}
-    if include_name:
-        fields[vol.Required(CONF_NAME, default=d.get(CONF_NAME, "Open-Meteo"))] = (
-            selector.TextSelector()
-        )
-    fields[
-        vol.Required(CONF_LATITUDE, default=d.get(CONF_LATITUDE, hass.config.latitude))
-    ] = _num("°", minimum=-90, maximum=90, step=0.0001)
-    fields[
-        vol.Required(CONF_LONGITUDE, default=d.get(CONF_LONGITUDE, hass.config.longitude))
-    ] = _num("°", minimum=-180, maximum=180, step=0.0001)
-    fields[
-        vol.Required(
-            CONF_SCAN_INTERVAL, default=d.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        )
-    ] = _num("s", minimum=300, maximum=86400, step=60)
-    return vol.Schema(fields)
-
-
 def _phase_schema(
     exclude: list[str], default_zones: list[str], add_default: bool
 ) -> vol.Schema:
@@ -279,9 +253,7 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="user", menu_options=["zone", "controller", "openmeteo"]
-        )
+        return self.async_show_menu(step_id="user", menu_options=["zone", "controller"])
 
     async def async_step_zone(
         self, user_input: dict[str, Any] | None = None
@@ -345,19 +317,6 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="openmeteo_zone", data_schema=vol.Schema(_zone_fields({}))
         )
 
-    async def async_step_openmeteo(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            return self.async_create_entry(
-                title=user_input.get(CONF_NAME, "Open-Meteo"),
-                data={**user_input, CONF_ENTRY_TYPE: ENTRY_TYPE_OPENMETEO},
-            )
-        return self.async_show_form(
-            step_id="openmeteo",
-            data_schema=_openmeteo_schema(self.hass, {}, include_name=True),
-        )
-
     async def async_step_controller(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -397,8 +356,6 @@ class EasyIrrigationOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         current = {**self.config_entry.data, **self.config_entry.options}
-        if current.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_OPENMETEO:
-            return await self.async_step_openmeteo()
         if current.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CONTROLLER:
             return await self.async_step_controller()
         if current.get(CONF_MODE) == MODE_CALCULATED:
@@ -428,17 +385,6 @@ class EasyIrrigationOptionsFlow(OptionsFlow):
             current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="calculated", data_schema=_calculated_schema(current), errors=errors
-        )
-
-    async def async_step_openmeteo(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-        current = {**self.config_entry.data, **self.config_entry.options}
-        return self.async_show_form(
-            step_id="openmeteo",
-            data_schema=_openmeteo_schema(self.hass, current, include_name=False),
         )
 
     async def async_step_openmeteo_zone(

@@ -41,7 +41,7 @@ from .const import (
 )
 from .bucket_math import apply_net_et0
 from .et0 import avp_from_dewpoint, avp_from_rh, et0_fao56, wind_speed_2m
-from .openmeteo import async_get_openmeteo
+from .openmeteo import async_fetch_openmeteo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +68,8 @@ class EasyIrrigationCoordinator:
         # re-calculation refresh to the latest value without double-counting).
         self.et0_applied: float | None = None
         self.last_irrigation_date: str | None = None
+        # Last Open-Meteo fetch (et0/rain/net/date) when this zone uses that mode.
+        self.openmeteo: dict = {}
         self._listeners: list[Callable[[], None]] = []
 
     @property
@@ -120,21 +122,10 @@ class EasyIrrigationCoordinator:
         return value
 
     def _read_et0(self) -> float | None:
-        """Return the daily net ET (mm) for this zone, by configured mode."""
+        """Net ET (mm) for the sensor / FAO-56 modes (Open-Meteo is fetched async)."""
         cfg = self.config
-        mode = cfg.get(CONF_MODE, MODE_SENSOR)
-        if mode == MODE_CALCULATED:
+        if cfg.get(CONF_MODE, MODE_SENSOR) == MODE_CALCULATED:
             return self._compute_et0_from_weather(cfg)
-        if mode == MODE_OPENMETEO:
-            coordinator = async_get_openmeteo(self.hass)
-            if coordinator is None:
-                _LOGGER.warning(
-                    "Easy Irrigation: zone %s uses Open-Meteo, but no Open-Meteo "
-                    "source is configured - add one via Add Integration",
-                    self.entry.title,
-                )
-                return None
-            return coordinator.net
         return self._read_float(cfg.get(CONF_ET0_SENSOR))
 
     def _compute_et0_from_weather(self, cfg: dict) -> float | None:
@@ -215,7 +206,16 @@ class EasyIrrigationCoordinator:
         service. See :func:`bucket_math.apply_net_et0`.
         """
         cfg = self.config
-        net = self._read_et0()
+        if cfg.get(CONF_MODE, MODE_SENSOR) == MODE_OPENMETEO:
+            self.openmeteo = (
+                await async_fetch_openmeteo(
+                    self.hass, self.hass.config.latitude, self.hass.config.longitude
+                )
+                or {}
+            )
+            net = self.openmeteo.get("net")
+        else:
+            net = self._read_et0()
         today = dt_util.now().date().isoformat()
         self.bucket, self.last_et0_date, self.et0_applied = apply_net_et0(
             bucket=self.bucket,
