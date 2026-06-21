@@ -2,16 +2,20 @@
 
 A lightweight, transparent soil-moisture **bucket** irrigation helper for Home Assistant.
 
-It tracks a per-zone water balance (the "bucket") in millimetres: each day it subtracts the
-net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, computes how long
-that zone needs to be watered. The actual valve switching stays in **your** automations - this
-integration is the "brain" (buckets + durations + a start plan), not the "hands".
+It tracks a per zone water balance (the "bucket") in millimetres. Each day it subtracts the net
+evapotranspiration (ET0 minus rainfall), and once the bucket runs dry it computes how long that
+zone needs to be watered. The valve switching can stay in **your** automations, or the controller
+can do it for you. The integration is the brain (buckets, durations, and a start plan), not the
+hands.
 
 > **Status:** v0.9. Each zone is one config entry and a schedule controller is a separate entry,
 > both set up entirely in the UI (English or German, following your Home Assistant language). ET0
 > can come straight from Open-Meteo with no helper sensors, and the controller can run the whole
 > day by itself (daily calculation plus optional valve switching), so a fully automation free
 > setup is possible.
+
+> **Full guide:** [docs/GUIDE.md](docs/GUIDE.md) covers the concepts, every setting, the services,
+> a step by step setup, troubleshooting, and the design rationale.
 
 ## Why
 
