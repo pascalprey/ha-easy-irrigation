@@ -9,15 +9,17 @@ STORAGE_VERSION = 1
 # Zone "next watering" sensors listen for it to refresh from their controller.
 SIGNAL_SCHEDULE_UPDATED = f"{DOMAIN}_schedule_updated"
 
-# Entry type (a config entry is either a watering zone or a schedule controller)
+# Entry type (zone, schedule controller, or a shared Open-Meteo data source)
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_ZONE = "zone"
 ENTRY_TYPE_CONTROLLER = "controller"
+ENTRY_TYPE_OPENMETEO = "openmeteo"
 
 # ET0 source mode (zone)
 CONF_MODE = "et0_mode"
 MODE_SENSOR = "sensor"
 MODE_CALCULATED = "calculated"
+MODE_OPENMETEO = "openmeteo"  # read net ET0 from the built-in Open-Meteo source
 
 # Mode "sensor": a single sensor giving the daily *net* ET (ET0 - rainfall) in mm
 CONF_ET0_SENSOR = "et0_sensor"
@@ -48,17 +50,28 @@ CONF_LEAD_TIME = "lead_time_s"
 CONF_DRAINAGE = "drainage_rate"
 CONF_MIN_DAYS_BETWEEN = "min_days_between"
 
+# Built-in Open-Meteo data source (its own config entry; shared by zones + skip)
+CONF_LATITUDE = "latitude"
+CONF_LONGITUDE = "longitude"
+CONF_SCAN_INTERVAL = "scan_interval"  # seconds between Open-Meteo fetches
+DEFAULT_SCAN_INTERVAL = 1800
+OPENMETEO_ATTRIBUTION = "Weather data by Open-Meteo.com (CC BY 4.0)"
+
 # Schedule controller parameters
 CONF_SUNRISE_OFFSET = "sunrise_offset_min"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_RAIN_THRESHOLD = "rain_threshold_mm"
 CONF_CALC_TIME = "calc_time"      # daily wall-clock time to run the calculation (HH:MM:SS)
 CONF_RUN_VALVES = "run_valves"    # let the controller switch the valves itself (no automation)
+CONF_RAIN_SOURCE = "rain_source"  # where the rain-skip reads its forecast
+RAIN_SOURCE_WEATHER = "weather"
+RAIN_SOURCE_OPENMETEO = "openmeteo"
 CONF_PHASES = "phases"  # list[list[zone duration-sensor entity_id]]
 
 # Controller defaults that are not plain floats (kept out of DEFAULTS below)
 DEFAULT_CALC_TIME = "23:00:00"
 DEFAULT_RUN_VALVES = False
+DEFAULT_RAIN_SOURCE = RAIN_SOURCE_WEATHER
 
 # Flow-only keys (collected during the phase loop, never stored verbatim)
 CONF_PHASE_ZONES = "zones"

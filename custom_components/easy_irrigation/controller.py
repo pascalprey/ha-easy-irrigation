@@ -34,18 +34,22 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_CALC_TIME,
+    CONF_RAIN_SOURCE,
     CONF_RAIN_THRESHOLD,
     CONF_RUN_VALVES,
     CONF_SUNRISE_OFFSET,
     CONF_VALVE_ENTITY,
     CONF_WEATHER_ENTITY,
     DEFAULT_CALC_TIME,
+    DEFAULT_RAIN_SOURCE,
     DEFAULT_RUN_VALVES,
     DEFAULTS,
+    RAIN_SOURCE_OPENMETEO,
     SIGNAL_SCHEDULE_UPDATED,
     phases_from_config,
     to_float,
 )
+from .openmeteo import async_get_openmeteo
 from .schedule_math import compute_schedule
 
 _LOGGER = logging.getLogger(__name__)
@@ -249,9 +253,26 @@ class ScheduleController:
 
     async def _async_should_skip(self) -> bool:
         cfg = self.config
+        rain = await self._async_forecast_rain(cfg)
+        if rain is None:
+            return False
+        threshold = float(cfg.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD]))
+        return rain >= threshold
+
+    async def _async_forecast_rain(self, cfg: dict) -> float | None:
+        """Forecast daily rainfall (mm) from the configured rain source."""
+        if cfg.get(CONF_RAIN_SOURCE, DEFAULT_RAIN_SOURCE) == RAIN_SOURCE_OPENMETEO:
+            coordinator = async_get_openmeteo(self.hass)
+            if coordinator is None:
+                _LOGGER.warning(
+                    "Easy Irrigation: rain source is Open-Meteo, but no Open-Meteo "
+                    "source is configured"
+                )
+                return None
+            return coordinator.rain
         weather = cfg.get(CONF_WEATHER_ENTITY)
         if not weather:
-            return False
+            return None
         try:
             response = await self.hass.services.async_call(
                 "weather",
@@ -263,13 +284,11 @@ class ScheduleController:
             )
         except Exception as err:  # noqa: BLE001 - forecast is best-effort
             _LOGGER.debug("Weather forecast unavailable for %s: %s", weather, err)
-            return False
+            return None
         forecast = ((response or {}).get(weather) or {}).get("forecast") or []
         if not forecast:
-            return False
-        rain = to_float(forecast[0].get("precipitation")) or 0.0
-        threshold = float(cfg.get(CONF_RAIN_THRESHOLD, DEFAULTS[CONF_RAIN_THRESHOLD]))
-        return rain >= threshold
+            return None
+        return to_float(forecast[0].get("precipitation"))
 
     async def async_recompute(self) -> None:
         """Rebuild the plan from the current zone durations and forecast."""

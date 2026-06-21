@@ -33,6 +33,7 @@ from .const import (
     CONF_WIND_UNIT,
     DOMAIN,
     MODE_CALCULATED,
+    MODE_OPENMETEO,
     MODE_SENSOR,
     STORAGE_VERSION,
     WIND_UNIT_KMH,
@@ -40,6 +41,7 @@ from .const import (
 )
 from .bucket_math import apply_net_et0
 from .et0 import avp_from_dewpoint, avp_from_rh, et0_fao56, wind_speed_2m
+from .openmeteo import async_get_openmeteo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,8 +122,19 @@ class EasyIrrigationCoordinator:
     def _read_et0(self) -> float | None:
         """Return the daily net ET (mm) for this zone, by configured mode."""
         cfg = self.config
-        if cfg.get(CONF_MODE, MODE_SENSOR) == MODE_CALCULATED:
+        mode = cfg.get(CONF_MODE, MODE_SENSOR)
+        if mode == MODE_CALCULATED:
             return self._compute_et0_from_weather(cfg)
+        if mode == MODE_OPENMETEO:
+            coordinator = async_get_openmeteo(self.hass)
+            if coordinator is None:
+                _LOGGER.warning(
+                    "Easy Irrigation: zone %s uses Open-Meteo, but no Open-Meteo "
+                    "source is configured - add one via Add Integration",
+                    self.entry.title,
+                )
+                return None
+            return coordinator.net
         return self._read_float(cfg.get(CONF_ET0_SENSOR))
 
     def _compute_et0_from_weather(self, cfg: dict) -> float | None:

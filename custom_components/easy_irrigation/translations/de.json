@@ -6,7 +6,8 @@
         "description": "Füge eine Bewässerungszone hinzu oder einen Zeitplan-Controller, der deine Zonen zu einem Startplan zusammenfasst.",
         "menu_options": {
           "zone": "Bewässerungszone hinzufügen",
-          "controller": "Zeitplan-Controller hinzufügen"
+          "controller": "Zeitplan-Controller hinzufügen",
+          "openmeteo": "Open-Meteo-Datenquelle hinzufügen"
         }
       },
       "zone": {
@@ -57,6 +58,31 @@
           "min_days_between": "Mindesttage zwischen Bewässerungen"
         }
       },
+      "openmeteo": {
+        "title": "Open-Meteo-Datenquelle",
+        "description": "Holt Referenz-ET0 und Niederschlag direkt von Open-Meteo für einen Standort. Koordinaten standardmäßig aus Home Assistant. Wetterdaten von Open-Meteo.com (CC BY 4.0); die kostenlose API ist für nicht-kommerzielle Nutzung.",
+        "data": {
+          "name": "Name",
+          "latitude": "Breitengrad",
+          "longitude": "Längengrad",
+          "scan_interval": "Aktualisierungsintervall (s)"
+        }
+      },
+      "openmeteo_zone": {
+        "title": "Bewässerungszone hinzufügen (Open-Meteo)",
+        "description": "Diese Zone bezieht ihre tägliche Netto-ET0 (ET0 minus Niederschlag) aus der Open-Meteo-Datenquelle. Lege zuerst eine Open-Meteo-Quelle an, falls noch keine vorhanden ist.",
+        "data": {
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
       "controller": {
         "title": "Zeitplan-Controller",
         "description": "Berechnet die Gesamtlaufzeit und eine Startzeit, sodass die Bewässerung kurz vor Sonnenaufgang endet. Der Controller rechnet täglich selbst zur eingestellten Uhrzeit (keine Automation nötig) und kann optional die Ventile direkt schalten. Anschließend ordnest du Zonen den Phasen zu.",
@@ -65,6 +91,7 @@
           "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
           "calc_time": "Uhrzeit der täglichen Berechnung (rückwärts, Ist-Wert des Tages — z. B. 23:00)",
           "run_valves": "Ventile direkt vom Controller schalten lassen (ohne Automation)",
+          "rain_source": "Quelle der Regenprognose",
           "weather_entity": "Wetter-Entität für die Regenprognose — optional",
           "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
         }
@@ -122,6 +149,28 @@
           "min_days_between": "Mindesttage zwischen Bewässerungen"
         }
       },
+      "openmeteo": {
+        "title": "Open-Meteo-Datenquelle bearbeiten",
+        "data": {
+          "latitude": "Breitengrad",
+          "longitude": "Längengrad",
+          "scan_interval": "Aktualisierungsintervall (s)"
+        }
+      },
+      "openmeteo_zone": {
+        "title": "Zone bearbeiten (Open-Meteo)",
+        "data": {
+          "valve_entity": "Ventil (Schalter-/Ventil-Entität) — optional",
+          "area_m2": "Fläche (m²)",
+          "flow_lpm": "Durchfluss (L/min)",
+          "max_bucket_mm": "Maximaler Speicher (mm)",
+          "multiplier": "Multiplikator",
+          "lead_time_s": "Vorlaufzeit (s)",
+          "max_duration_s": "Maximale Dauer (s)",
+          "drainage_rate": "Drainage-Rate (mm/h bei Sättigung)",
+          "min_days_between": "Mindesttage zwischen Bewässerungen"
+        }
+      },
       "controller": {
         "title": "Zeitplan-Controller bearbeiten",
         "description": "Beim Speichern werden die Phasen erneut durchlaufen.",
@@ -129,6 +178,7 @@
           "sunrise_offset_min": "So viele Minuten vor Sonnenaufgang fertig sein",
           "calc_time": "Uhrzeit der täglichen Berechnung (rückwärts, Ist-Wert des Tages — z. B. 23:00)",
           "run_valves": "Ventile direkt vom Controller schalten lassen (ohne Automation)",
+          "rain_source": "Quelle der Regenprognose",
           "weather_entity": "Wetter-Entität für die Regenprognose — optional",
           "rain_threshold_mm": "Überspringen, wenn der prognostizierte Tagesniederschlag mindestens (mm) beträgt"
         }
@@ -150,7 +200,14 @@
     "et0_mode": {
       "options": {
         "sensor": "Aus einem ET0-Sensor",
+        "openmeteo": "Open-Meteo (integriert)",
         "calculated": "Aus Wettersensoren berechnen (FAO-56)"
+      }
+    },
+    "rain_source": {
+      "options": {
+        "weather": "Wetter-Entität",
+        "openmeteo": "Open-Meteo"
       }
     },
     "wind_unit": {
@@ -165,6 +222,7 @@
       "bucket": { "name": "Wasserspeicher" },
       "duration": { "name": "Dauer" },
       "next_watering": { "name": "Nächste Bewässerung" },
+      "net_et0": { "name": "Netto-ET0" },
       "total_runtime": { "name": "Gesamtlaufzeit" },
       "start_time": { "name": "Startzeit" }
     },

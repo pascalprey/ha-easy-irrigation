@@ -7,10 +7,11 @@ net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, compu
 that zone needs to be watered. The actual valve switching stays in **your** automations - this
 integration is the "brain" (buckets + durations + a start plan), not the "hands".
 
-> **Status:** v0.8. One zone = one config entry; a schedule controller is a separate entry.
-> The UI is available in English and German (chosen by your Home Assistant language).
-> The controller can run the whole day on its own (daily calculation + optional valve
-> switching), so a fully automation-free setup is possible.
+> **Status:** v0.9. One zone = one config entry; a schedule controller and an Open-Meteo data
+> source are separate entries. The UI is available in English and German (chosen by your Home
+> Assistant language). The controller can run the whole day on its own (daily calculation +
+> optional valve switching), so a fully automation-free setup is possible, and ET0 can come
+> straight from Open-Meteo with no helper sensors.
 
 ## Why
 
@@ -23,13 +24,20 @@ ET0 (or let it compute ET0 from weather sensors), configure your zones, done.
 1. HACS -> Integrations -> menu -> **Custom repositories** -> add this repository (category:
    *Integration*).
 2. Install **Easy Irrigation**, then restart Home Assistant.
-3. **Settings -> Devices & Services -> Add Integration -> Easy Irrigation**, then pick *zone*
-   or *schedule controller*.
+3. **Settings -> Devices & Services -> Add Integration -> Easy Irrigation**, then pick *zone*,
+   *schedule controller*, or *Open-Meteo data source*.
 
 ## Zones
 
-Add a zone and pick the **ET0 source** (a daily-net ET0 sensor, or FAO-56 computed from your
-own daily-aggregated weather sensors).
+Add a zone and pick its **ET0 source** - how the daily net evapotranspiration (ET0 minus
+rainfall, in mm) is obtained:
+
+1. **Open-Meteo (built-in)** - *recommended.* No sensor, no YAML: add an **Open-Meteo data
+   source** once (coordinates default to your Home Assistant location) and zones read the net
+   ET0 from it. See [Open-Meteo data source](#open-meteo-data-source).
+2. **From an ET0 sensor** - point at any sensor that already gives the daily net ET in mm.
+3. **FAO-56 from weather sensors** - compute ET0 locally from your own daily-aggregated weather
+   sensors. See [FAO-56 from your own sensors](#fao-56-from-your-own-sensors).
 
 ### Zone parameters
 
@@ -64,6 +72,34 @@ late `calc_time` so the figure is the day's actual value rather than a morning f
 > All sensor values are parsed comma-tolerantly (`"3,86"` works as well as `"3.86"`), so a
 > localised sensor never breaks the calculation.
 
+### Open-Meteo data source
+
+Add Integration -> Easy Irrigation -> **Open-Meteo data source**. Latitude/longitude default to
+your Home Assistant location (override if you like); the integration fetches the daily reference
+ET0 and rainfall itself and exposes one diagnostic **Net ET0** sensor (gross ET0 and rainfall as
+attributes). Every zone set to the Open-Meteo source - and, optionally, the controller's rain
+skip - reads from this single shared fetch, so there is no REST sensor and no template to set up.
+
+> **Attribution & licence.** Weather data by [Open-Meteo.com](https://open-meteo.com) under
+> CC BY 4.0. Open-Meteo's free API needs no key and is for **non-commercial** use; stay within
+> their fair-use limits.
+
+### FAO-56 from your own sensors
+
+The FAO-56 source expects **daily-aggregated** inputs (daily min/max temperature, mean humidity
+or dew point, mean wind, optional daily solar in MJ/m²/day and daily rainfall). Home Assistant's
+built-in helpers turn live sensors into those daily values:
+
+- **Daily min/max temperature** - a `statistics` helper on your outdoor temperature sensor
+  (characteristic *value_min* / *value_max*, sampling period 1 day).
+- **Mean humidity / wind** - a `statistics` helper (characteristic *average_linear*, period 1 day).
+- **Solar (MJ/m²/day)** - integrate a live W/m² sensor with an `integration` (Riemann-sum) helper
+  to get Wh/m², reset daily with a `utility_meter`, then multiply by `0.0036` to get MJ/m²/day.
+- **Daily rainfall** - a `utility_meter` (daily cycle) on a rain sensor.
+
+If that is a lot of helpers, use the **Open-Meteo (built-in)** source instead - it does the
+FAO-56 for you.
+
 ## Schedule controller
 
 Add a second entry of type **schedule controller**. After the controller settings you assign
@@ -83,8 +119,9 @@ It exposes (plan only - it does not switch valves):
   `skip`, and a full `plan` (per phase: offset, duration, each zone's valve).
 - `sensor.<controller>_phase_<n>` (s) - per-phase runtime, named `Phase n (zone, zone)`.
 - `sensor.<controller>_start_time` (timestamp) - when to start.
-- `binary_sensor.<controller>_skip` - on when the **weather entity**'s daily forecast rainfall
-  is at or above the threshold.
+- `binary_sensor.<controller>_skip` - on when the forecast daily rainfall is at or above the
+  threshold. The forecast comes from the configurable **rain source**: a `weather.*` entity, or
+  the built-in **Open-Meteo** source (so one data source can drive both ET0 and the rain skip).
 - a **Next watering** timestamp sensor *per zone*, attached to that zone's device so it sits
   next to the zone's bucket/duration. Its value is the zone's own valve-open time
   (`start_time` + the phase offset); it is `unknown` when the zone is not scheduled, with a
@@ -138,6 +175,7 @@ Assistant dependencies and are unit-tested: `pytest tests/`.
 - [x] Optional built-in valve execution (fully automation-free watering).
 - [x] Refresh model: a later `calculate` uses the newest net-ET0 without double-counting.
 - [x] `run_schedule` service to run/test the plan on demand.
+- [x] Built-in Open-Meteo ET0 source (no REST sensor) + selectable rain source.
 - [ ] Number entities for live per-zone tuning.
 
 ## License

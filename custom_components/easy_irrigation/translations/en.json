@@ -6,7 +6,8 @@
         "description": "Add a watering zone, or a schedule controller that aggregates your zones into a start plan.",
         "menu_options": {
           "zone": "Add a watering zone",
-          "controller": "Add a schedule controller"
+          "controller": "Add a schedule controller",
+          "openmeteo": "Add an Open-Meteo data source"
         }
       },
       "zone": {
@@ -57,6 +58,31 @@
           "min_days_between": "Minimum days between irrigations"
         }
       },
+      "openmeteo": {
+        "title": "Open-Meteo data source",
+        "description": "Fetches reference ET0 and rainfall directly from Open-Meteo for one location. Coordinates default to your Home Assistant location. Weather data by Open-Meteo.com (CC BY 4.0); the free API is for non-commercial use.",
+        "data": {
+          "name": "Name",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "scan_interval": "Update interval (s)"
+        }
+      },
+      "openmeteo_zone": {
+        "title": "Add irrigation zone (Open-Meteo)",
+        "description": "This zone takes its daily net ET0 (ET0 minus rainfall) from the Open-Meteo data source. Add an Open-Meteo source first if you don't have one yet.",
+        "data": {
+          "valve_entity": "Valve (switch/valve entity) — optional",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
+        }
+      },
       "controller": {
         "title": "Schedule controller",
         "description": "Computes the total runtime and a start time so watering finishes shortly before sunrise. The controller calculates by itself once a day at the configured time (no automation needed) and can optionally switch the valves directly. Next you assign zones to phases.",
@@ -65,6 +91,7 @@
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "calc_time": "Time of the daily calculation (retrospective, the day's actual ET — e.g. 23:00)",
           "run_valves": "Let this controller switch the valves itself (no automation needed)",
+          "rain_source": "Rain forecast source",
           "weather_entity": "Weather entity for the rain forecast — optional",
           "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"
         }
@@ -122,6 +149,28 @@
           "min_days_between": "Minimum days between irrigations"
         }
       },
+      "openmeteo": {
+        "title": "Edit Open-Meteo data source",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "scan_interval": "Update interval (s)"
+        }
+      },
+      "openmeteo_zone": {
+        "title": "Edit zone (Open-Meteo)",
+        "data": {
+          "valve_entity": "Valve (switch/valve entity) — optional",
+          "area_m2": "Area (m²)",
+          "flow_lpm": "Flow rate (L/min)",
+          "max_bucket_mm": "Maximum bucket (mm)",
+          "multiplier": "Multiplier",
+          "lead_time_s": "Lead time (s)",
+          "max_duration_s": "Maximum duration (s)",
+          "drainage_rate": "Drainage rate (mm/h at saturation)",
+          "min_days_between": "Minimum days between irrigations"
+        }
+      },
       "controller": {
         "title": "Edit schedule controller",
         "description": "Saving re-walks the phase assignment.",
@@ -129,6 +178,7 @@
           "sunrise_offset_min": "Finish this many minutes before sunrise",
           "calc_time": "Time of the daily calculation (retrospective, the day's actual ET — e.g. 23:00)",
           "run_valves": "Let this controller switch the valves itself (no automation needed)",
+          "rain_source": "Rain forecast source",
           "weather_entity": "Weather entity for the rain forecast — optional",
           "rain_threshold_mm": "Skip if forecast daily rainfall is at least (mm)"
         }
@@ -150,7 +200,14 @@
     "et0_mode": {
       "options": {
         "sensor": "From an ET0 sensor",
+        "openmeteo": "Open-Meteo (built-in)",
         "calculated": "Computed from weather sensors (FAO-56)"
+      }
+    },
+    "rain_source": {
+      "options": {
+        "weather": "Weather entity",
+        "openmeteo": "Open-Meteo"
       }
     },
     "wind_unit": {
@@ -165,6 +222,7 @@
       "bucket": { "name": "Bucket" },
       "duration": { "name": "Duration" },
       "next_watering": { "name": "Next watering" },
+      "net_et0": { "name": "Net ET0" },
       "total_runtime": { "name": "Total runtime" },
       "start_time": { "name": "Start time" }
     },

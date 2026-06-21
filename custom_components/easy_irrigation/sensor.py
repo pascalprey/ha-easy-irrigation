@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -20,17 +20,21 @@ from homeassistant.helpers.entity_platform import (
     AddEntitiesCallback,
     async_get_current_platform,
 )
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENTRY_TYPE,
     DOMAIN,
     ENTRY_TYPE_CONTROLLER,
+    ENTRY_TYPE_OPENMETEO,
+    OPENMETEO_ATTRIBUTION,
     SIGNAL_SCHEDULE_UPDATED,
     phases_from_config,
 )
 from .controller import ScheduleController
 from .coordinator import EasyIrrigationCoordinator
+from .openmeteo import OpenMeteoCoordinator
 
 
 def _zone_name(hass: HomeAssistant, sensor_id: str) -> str:
@@ -67,7 +71,11 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the sensors for a zone or a schedule controller."""
+    """Set up the sensors for a zone, a schedule controller, or an Open-Meteo source."""
+    if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_OPENMETEO:
+        async_add_entities([NetEt0Sensor(entry.runtime_data, entry)])
+        return
+
     if entry.data.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_CONTROLLER:
         _remove_legacy_zone_next_sensors(hass, entry)
         controller: ScheduleController = entry.runtime_data
@@ -340,4 +348,46 @@ class ZoneNextWateringSensor(SensorEntity):
             "phase": info.get("phase"),
             "offset_seconds": info.get("offset"),
             "duration_seconds": info.get("duration"),
+        }
+
+
+# --- Open-Meteo source sensor ---------------------------------------------
+
+
+class NetEt0Sensor(CoordinatorEntity[OpenMeteoCoordinator], SensorEntity):
+    """Daily net ET0 (ET0 minus rainfall) from the built-in Open-Meteo source.
+
+    Shared by every zone that uses the Open-Meteo ET0 source; gross ET0 and
+    rainfall are exposed as attributes. Diagnostic, so it stays out of the way.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "net_et0"
+    _attr_native_unit_of_measurement = "mm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:water-percent"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_attribution = OPENMETEO_ATTRIBUTION
+
+    def __init__(self, coordinator: OpenMeteoCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_net_et0"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="Easy Irrigation",
+            model="Open-Meteo source",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        net = self.coordinator.net
+        return round(net, 2) if net is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "gross_et0_mm": self.coordinator.et0,
+            "rainfall_mm": self.coordinator.rain,
+            "forecast_date": self.coordinator.forecast_date,
         }
