@@ -7,11 +7,11 @@ net evapotranspiration (ET0 minus rainfall) and, once the bucket runs dry, compu
 that zone needs to be watered. The actual valve switching stays in **your** automations - this
 integration is the "brain" (buckets + durations + a start plan), not the "hands".
 
-> **Status:** v0.9. One zone = one config entry; a schedule controller and an Open-Meteo data
-> source are separate entries. The UI is available in English and German (chosen by your Home
-> Assistant language). The controller can run the whole day on its own (daily calculation +
-> optional valve switching), so a fully automation-free setup is possible, and ET0 can come
-> straight from Open-Meteo with no helper sensors.
+> **Status:** v0.9. Each zone is one config entry and a schedule controller is a separate entry,
+> both set up entirely in the UI (English or German, following your Home Assistant language). ET0
+> can come straight from Open-Meteo with no helper sensors, and the controller can run the whole
+> day by itself (daily calculation plus optional valve switching), so a fully automation free
+> setup is possible.
 
 ## Why
 
@@ -162,8 +162,8 @@ durations, then call `register_irrigation` per zone.
 
 ## Development
 
-The FAO-56 maths (`et0.py`) and the scheduling maths (`schedule_math.py`) have no Home
-Assistant dependencies and are unit-tested: `pytest tests/`.
+The FAO-56 maths (`et0.py`), the scheduling maths (`schedule_math.py`) and the bucket maths
+(`bucket_math.py`) have no Home Assistant dependencies and are unit-tested: `pytest tests/`.
 
 ## Roadmap
 

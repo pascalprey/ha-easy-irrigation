@@ -199,8 +199,8 @@
   "selector": {
     "et0_mode": {
       "options": {
+        "openmeteo": "Open-Meteo (recommended, built-in)",
         "sensor": "From an ET0 sensor",
-        "openmeteo": "Open-Meteo (built-in)",
         "calculated": "Computed from weather sensors (FAO-56)"
       }
     },

@@ -270,9 +270,9 @@ class EasyIrrigationConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME): selector.TextSelector(),
-                vol.Required(CONF_MODE, default=MODE_SENSOR): selector.SelectSelector(
+                vol.Required(CONF_MODE, default=MODE_OPENMETEO): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[MODE_SENSOR, MODE_OPENMETEO, MODE_CALCULATED],
+                        options=[MODE_OPENMETEO, MODE_SENSOR, MODE_CALCULATED],
                         translation_key="et0_mode",
                         mode=selector.SelectSelectorMode.LIST,
                     )
