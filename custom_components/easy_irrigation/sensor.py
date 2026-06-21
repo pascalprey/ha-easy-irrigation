@@ -101,6 +101,7 @@ async def async_setup_entry(
         [
             BucketSensor(coordinator, entry),
             DurationSensor(coordinator, entry),
+            NetEt0Sensor(coordinator, entry),
             ZoneNextWateringSensor(entry),
         ]
     )
@@ -168,20 +169,6 @@ class BucketSensor(_ZoneSensorBase):
     def native_value(self) -> float:
         return round(self._coordinator.bucket, 2)
 
-    @property
-    def extra_state_attributes(self) -> dict | None:
-        """Expose the last Open-Meteo figures (only for Open-Meteo zones)."""
-        om = self._coordinator.openmeteo
-        if not om:
-            return None
-        return {
-            "net_et0_mm": om.get("net"),
-            "gross_et0_mm": om.get("et0"),
-            "rainfall_mm": om.get("rain"),
-            "et0_date": om.get("date"),
-            "attribution": OPENMETEO_ATTRIBUTION,
-        }
-
 
 class DurationSensor(_ZoneSensorBase):
     """Recommended irrigation run time in seconds."""
@@ -198,6 +185,37 @@ class DurationSensor(_ZoneSensorBase):
     @property
     def native_value(self) -> int:
         return self._coordinator.duration
+
+
+class NetEt0Sensor(_ZoneSensorBase):
+    """Net ET0 (ET0 minus rainfall, mm) last applied to this zone."""
+
+    _attr_translation_key = "net_et0"
+    _attr_native_unit_of_measurement = "mm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:water-percent"
+
+    def __init__(self, coordinator: EasyIrrigationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_net_et0"
+
+    @property
+    def native_value(self) -> float | None:
+        net = self._coordinator.last_net
+        return round(net, 2) if net is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Open-Meteo breakdown (gross ET0 / rainfall / date), when applicable."""
+        om = self._coordinator.openmeteo
+        if not om:
+            return None
+        return {
+            "gross_et0_mm": om.get("et0"),
+            "rainfall_mm": om.get("rain"),
+            "et0_date": om.get("date"),
+            "attribution": OPENMETEO_ATTRIBUTION,
+        }
 
 
 # --- Controller sensors ---------------------------------------------------

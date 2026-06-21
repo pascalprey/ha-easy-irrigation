@@ -70,6 +70,8 @@ class EasyIrrigationCoordinator:
         self.last_irrigation_date: str | None = None
         # Last Open-Meteo fetch (et0/rain/net/date) when this zone uses that mode.
         self.openmeteo: dict = {}
+        # Last net ET0 (mm) actually applied - exposed via the Net ET0 sensor.
+        self.last_net: float | None = None
         self._listeners: list[Callable[[], None]] = []
 
     @property
@@ -83,6 +85,7 @@ class EasyIrrigationCoordinator:
         self.bucket = float(data.get("bucket", 0.0))
         self.last_et0_date = data.get("last_et0_date")
         self.et0_applied = data.get("et0_applied")
+        self.last_net = data.get("last_net")
         self.last_irrigation_date = data.get("last_irrigation_date")
         self._recompute_duration()
 
@@ -92,6 +95,7 @@ class EasyIrrigationCoordinator:
                 "bucket": self.bucket,
                 "last_et0_date": self.last_et0_date,
                 "et0_applied": self.et0_applied,
+                "last_net": self.last_net,
                 "last_irrigation_date": self.last_irrigation_date,
             }
         )
@@ -216,6 +220,8 @@ class EasyIrrigationCoordinator:
             net = self.openmeteo.get("net")
         else:
             net = self._read_et0()
+        if net is not None:
+            self.last_net = net
         today = dt_util.now().date().isoformat()
         self.bucket, self.last_et0_date, self.et0_applied = apply_net_et0(
             bucket=self.bucket,

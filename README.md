@@ -53,8 +53,9 @@ rainfall, in mm) is obtained:
 | Drainage rate (mm/h) | Optional drainage of excess near saturation (`0` = off). |
 | Min days between irrigations | The zone reports duration `0` until this many days have passed since it was last watered (deep, infrequent watering). `0` = off. |
 
-Each zone exposes `sensor.<zone>_bucket` (mm) and `sensor.<zone>_duration` (s), plus the
-services `easy_irrigation.calculate`, `set_bucket`, `reset_bucket` and `register_irrigation`.
+Each zone exposes `sensor.<zone>_bucket` (mm), `sensor.<zone>_duration` (s) and
+`sensor.<zone>_net_et0` (mm, the net ET0 last applied), plus the services
+`easy_irrigation.calculate`, `set_bucket`, `reset_bucket` and `register_irrigation`.
 
 ### Maths
 
@@ -76,9 +77,9 @@ late `calc_time` so the figure is the day's actual value rather than a morning f
 
 Pick **Open-Meteo (built-in)** as a zone's ET0 source - no separate entry, no REST sensor, no
 template. At calculation time the zone fetches the daily reference ET0 and rainfall from
-Open-Meteo using your Home Assistant location, and uses the net (ET0 minus rainfall). The fetched
-figures appear as attributes on the zone's bucket sensor (`net_et0_mm`, `gross_et0_mm`,
-`rainfall_mm`, `et0_date`). One request per location is shared (cached ~30 min) across all
+Open-Meteo using your Home Assistant location, and uses the net (ET0 minus rainfall). The net
+value is exposed as the per-zone `sensor.<zone>_net_et0`, with gross ET0, rainfall and date as its
+attributes. One request per location is shared (cached ~30 min) across all
 Open-Meteo zones and the controller's rain skip, so the controller's rain source can also be set
 to Open-Meteo - a single source for both ET0 and the skip.
 
